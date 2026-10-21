@@ -1,0 +1,88 @@
+{
+    "products": [
+        {
+            "id": 1,
+            "name": "Americano",
+            "price": 2.00,
+            "image": "americano.png",
+            "description": "Espresso blended with hot water"
+        },
+        {
+            "id": 2,
+            "name": "Espresso",
+            "price": 1.80,
+            "image": "espresso.png",
+            "description": "A rich single-shot classic"
+        },
+        {
+            "id": 3,
+            "name": "Latte",
+            "price": 2.50,
+            "image": "latte.png",
+            "description": "Smooth espresso with steamed milk"
+        },
+        {
+            "id": 4,
+            "name": "Cappuccino",
+            "price": 2.60,
+            "image": "cappuccino.png",
+            "description": "Equal espresso, milk and foam"
+        },
+        {
+            "id": 5,
+            "name": "Mocha",
+            "price": 2.90,
+            "image": "mocha.png",
+            "description": "Espresso with chocolate and milk"
+        },
+        {
+            "id": 6,
+            "name": "Caramel Macchiato",
+            "price": 3.20,
+            "image": "caramel_macchiato.png",
+            "description": "Vanilla milk, espresso, caramel drizzle"
+        },
+        {
+            "id": 7,
+            "name": "Iced Americano",
+            "price": 2.20,
+            "image": "iced_americano.png",
+            "description": "Chilled espresso over ice"
+        },
+        {
+            "id": 8,
+            "name": "Iced Latte",
+            "price": 2.80,
+            "image": "iced_latte.png",
+            "description": "Cold milk over iced espresso"
+        },
+        {
+            "id": 9,
+            "name": "Iced Mocha",
+            "price": 3.10,
+            "image": "iced_mocha.png",
+            "description": "Icy chocolate espresso latte"
+        },
+        {
+            "id": 10,
+            "name": "Vanilla Latte",
+            "price": 3.00,
+            "image": "vanilla_latte.png",
+            "description": "Sweet vanilla-flavored latte"
+        },
+        {
+            "id": 11,
+            "name": "Hazelnut Latte",
+            "price": 3.00,
+            "image": "hazelnut_latte.png",
+            "description": "Nutty hazelnut latte"
+        },
+        {
+            "id": 12,
+            "name": "Coconut Coffee",
+            "price": 3.30,
+            "image": "coconut_coffee.png",
+            "description": "Creamy tropical coconut coffee"
+        }
+    ]
+}

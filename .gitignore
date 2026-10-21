@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
+.pytest_cache/
+# local secrets (never commit credentials)
+.env
+# local database backups made before risky changes
+data/backups/
+# smoke-run output files
+smoke_out.txt
+smoke_err.txt
+

@@ -1,0 +1,10 @@
+# Kiosk + tests. Install with:  python -m pip install -r requirements.txt
+#
+# IMPORTANT: do NOT also install vanilla "pygame" or "opencv-python" -
+# pygame-ce provides the same `pygame` module and opencv-contrib-python is a
+# superset of opencv-python. Having both copies installed overwrites each
+# other's files in site-packages and breaks the app unpredictably.
+pygame-ce>=2.5
+opencv-contrib-python>=4.8,<4.12   # satisfies both this project and MediaPipe
+mediapipe==0.10.21                 # requires numpy<2 (pip resolves it automatically)
+pytest>=8.0
