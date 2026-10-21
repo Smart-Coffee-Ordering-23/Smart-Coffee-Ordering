@@ -76,6 +76,8 @@ SOUND_MAX_VOICES = 3          # never more than this many sounds at the same tim
 SOUND_RETRIGGER_SECONDS = 0.3 # default minimum gap between two plays of one sound
 SOUND_AMBIENCE_ENABLED = False  # optional cafe background noise - OFF by default
 SOUND_AMBIENCE_VOLUME = 0.25    # ambience stays quietly in the background
+SOUND_MUSIC_ENABLED = True      # soft lo-fi cafe music loop (needs assets/sounds/fx_music.wav)
+SOUND_MUSIC_VOLUME = 0.50       # background music level (it ducks while effects play)
 DISCOUNT_PERCENT = 10         # smile gesture gives 10% off, once per order
 MAX_QUANTITY = 10             # maximum cups of one coffee
 MESSAGE_SECONDS = 2.5         # how long a toast message stays on screen
@@ -101,7 +103,12 @@ SWIPE_COOLDOWN = 1.0         # seconds to wait before another swipe is accepted
 # Face gestures (smile = discount, deliberate blink = back)
 SMILE_RATIO_THRESHOLD = 0.45  # mouth width / face width; above this = smiling
 SMILE_HOLD_SECONDS = 0.5
-EYE_CLOSED_THRESHOLD = 0.19   # eye openness; below this = eyes closed
+EYE_CLOSED_THRESHOLD = 0.22   # fallback (first second only): below this = eyes closed
+EYE_CLOSED_RELATIVE = 0.75    # eyes count as closed below 75% of YOUR normal open-eye value
+EYE_BASELINE_FRAMES = 90      # ~3 seconds of recent frames used to learn your open-eye value
+EYE_BASELINE_WARMUP = 15      # frames needed before the personal baseline is trusted
+EYE_SMOOTH_FRAMES = 3         # average the last few frames so camera noise does not hide a closed eye
+FACE_LOST_GRACE_SECONDS = 0.6 # MediaPipe often loses the face when the eyes shut - keep counting
 BLINK_HOLD_SECONDS = 0.5      # a quick normal blink is ignored on purpose
 BLINK_COOLDOWN = 1.5
 
