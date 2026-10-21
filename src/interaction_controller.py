@@ -66,6 +66,13 @@ class InteractionController:
         if self.audio is not None:
             self.audio.play(name)
 
+    def _qty_sound(self, direction):
+        """A musical note for the new cup count (falls back to the old tick)."""
+        play_quantity = getattr(self.audio, "play_quantity", None)
+        if callable(play_quantity) and play_quantity(self.quantity):
+            return
+        self._sound("qty_up" if direction > 0 else "qty_down")
+
     def _play_later(self, name, delay):
         """Schedule a sound `delay` seconds from now (order success sequence)."""
         if self.audio is not None and hasattr(self.audio, "play_later"):
@@ -154,20 +161,20 @@ class InteractionController:
         if event == "TWO_FINGERS":
             if self.quantity < config.MAX_QUANTITY:
                 self.quantity += 1
-                self._sound("qty_up")            # very short soft tick
+                self._qty_sound(1)
             else:
                 self.quantity = 1                 # wraps back to one cup
-                self._sound("qty_down")
+                self._qty_sound(-1)
         elif event == "SWIPE_RIGHT":
             if self.quantity < config.MAX_QUANTITY:
                 self.quantity += 1
-                self._sound("qty_up")            # very short soft tick
+                self._qty_sound(1)
             else:
                 self._swipe_between_screens(event)   # already at the maximum
         elif event == "SWIPE_LEFT":
             if self.quantity > 1:
                 self.quantity -= 1
-                self._sound("qty_down")          # very short soft tick
+                self._qty_sound(-1)
             else:
                 self._swipe_between_screens(event)   # already at 1
         elif event == "THUMBS_UP":
@@ -209,7 +216,9 @@ class InteractionController:
         self.menu.select(product)
         self.quantity = 1
         self.screen = config.SELECT
-        self._sound("select")
+        play_drink = getattr(self.audio, "play_drink", None)
+        if not (callable(play_drink) and play_drink(product.id)):
+            self._sound("select")             # no jingle file -> the normal pop
         self.set_message(f"{product.name} selected")
         return True
 
@@ -394,13 +403,13 @@ class InteractionController:
         elif action == "qty_minus":
             if self.quantity > 1:
                 self.quantity -= 1
-                self._sound("qty_down")     # very short soft tick
+                self._qty_sound(-1)
             else:
                 self.set_message("Minimum quantity is 1")
         elif action == "qty_plus":
             if self.quantity < config.MAX_QUANTITY:
                 self.quantity += 1
-                self._sound("qty_up")       # very short soft tick
+                self._qty_sound(1)
             else:
                 self.set_message(f"Maximum quantity is {config.MAX_QUANTITY}")
         elif action == "continue":

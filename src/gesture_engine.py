@@ -27,6 +27,11 @@ MIDDLE = (12, 10)
 RING = (16, 14)
 PINKY = (20, 18)
 
+# The thumb is checked differently (it bends sideways, not toward the wrist):
+# its tip must be clearly farther from the pinky knuckle than its middle joint.
+THUMB_EXTENDED_RATIO = 1.05
+FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
+
 
 class GestureEngine:
     """Recognizes hand poses, swipes, smiles and blinks - with debounce."""
@@ -49,6 +54,7 @@ class GestureEngine:
         self.eyes_closed_at = None
         self.blink_has_fired = False
         self.last_blink_time = 0.0
+        self.last_face_time = 0.0
 
     # ============================================================ main entry
     def update(self, landmarks, face_info=None):
@@ -72,6 +78,20 @@ class GestureEngine:
             return 0.0
         hold = config.GESTURE_HOLD_SECONDS.get(self.stable_gesture, 0.7)
         return min(1.0, (self._clock() - self.started_at) / hold)
+
+    @property
+    def smile_progress(self):
+        """0.0 to 1.0: how long the current smile has been held (for the UI)."""
+        if self.smile_started_at is None:
+            return 0.0
+        return min(1.0, (self._clock() - self.smile_started_at) / config.SMILE_HOLD_SECONDS)
+
+    @property
+    def blink_progress(self):
+        """0.0 to 1.0: how long the eyes have been closed (for the UI)."""
+        if self.eyes_closed_at is None:
+            return 0.0
+        return min(1.0, (self._clock() - self.eyes_closed_at) / config.BLINK_HOLD_SECONDS)
 
     # ============================================================ hand poses
     def _hand_event(self, landmarks):
@@ -117,6 +137,29 @@ class GestureEngine:
         tip, middle_joint = finger
         wrist = landmarks[0]
         return distance(landmarks[tip], wrist) > distance(landmarks[middle_joint], wrist) * 1.1
+
+    @staticmethod
+    def _is_thumb_extended(landmarks):
+        """Thumb sticks out: its tip is farther from the pinky knuckle than its joint."""
+        pinky_knuckle = landmarks[17]
+        return (distance(landmarks[4], pinky_knuckle)
+                > distance(landmarks[3], pinky_knuckle) * THUMB_EXTENDED_RATIO)
+
+    @staticmethod
+    def finger_states(landmarks):
+        """Which of the 5 fingers are straight right now? (for the camera panel)
+
+        Returns {"thumb": bool, "index": bool, "middle": bool, "ring": bool,
+        "pinky": bool}, or None when no hand is visible. This is display-only:
+        gesture decisions still go through update().
+        """
+        if landmarks is None:
+            return None
+        states = {"thumb": GestureEngine._is_thumb_extended(landmarks)}
+        for name, joints in (("index", INDEX), ("middle", MIDDLE),
+                             ("ring", RING), ("pinky", PINKY)):
+            states[name] = GestureEngine._is_finger_extended(landmarks, joints)
+        return states
 
     @staticmethod
     def _is_thumb_up(landmarks):
@@ -198,15 +241,21 @@ class GestureEngine:
     # ============================================================ face events
     def _face_events(self, face_info):
         """Turn smile / eye measurements into SMILE and BLINK events."""
+        now = self._clock()
         if face_info is None or not face_info.face_found:
             self.smile_started_at = None
             self.smile_has_fired = False
-            self.eyes_closed_at = None
-            self.blink_has_fired = False
-            return []
+            # MediaPipe often loses the face for a moment when the eyes shut.
+            # Keep the closed-eye timer running for a short grace period.
+            lost_for = now - self.last_face_time
+            if self.eyes_closed_at is None or lost_for > config.FACE_LOST_GRACE_SECONDS:
+                self.eyes_closed_at = None
+                self.blink_has_fired = False
+                return []
+            return self._blink_events(now)
 
+        self.last_face_time = now
         events = []
-        now = self._clock()
 
         # SMILE: the smile must be held briefly, then fires once
         if face_info.is_smiling:
@@ -223,14 +272,18 @@ class GestureEngine:
         if face_info.is_eyes_closed:
             if self.eyes_closed_at is None:
                 self.eyes_closed_at = now
-            long_enough = now - self.eyes_closed_at >= config.BLINK_HOLD_SECONDS
-            cooled_down = now - self.last_blink_time >= config.BLINK_COOLDOWN
-            if long_enough and cooled_down and not self.blink_has_fired:
-                self.blink_has_fired = True
-                self.last_blink_time = now
-                events.append("BLINK")
+            events.extend(self._blink_events(now))
         else:
             self.eyes_closed_at = None
             self.blink_has_fired = False
 
         return events
+
+    def _blink_events(self, now):
+        long_enough = now - self.eyes_closed_at >= config.BLINK_HOLD_SECONDS
+        cooled_down = now - self.last_blink_time >= config.BLINK_COOLDOWN
+        if long_enough and cooled_down and not self.blink_has_fired:
+            self.blink_has_fired = True
+            self.last_blink_time = now
+            return ["BLINK"]
+        return []

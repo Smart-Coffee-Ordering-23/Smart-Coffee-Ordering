@@ -202,3 +202,54 @@ def test_blink_fires_once():
                                                      eyes_closed=True)))
         clock.advance(0.1)
     assert events.count("BLINK") == 1
+
+
+# ------------------------------------------------------- finger display
+def test_finger_states_none_without_hand():
+    assert GestureEngine.finger_states(None) is None
+
+
+def test_finger_states_open_palm_with_thumb_out():
+    hand = make_hand(up=("index", "middle", "ring", "pinky"), thumb_up=True)
+    states = GestureEngine.finger_states(hand)
+    assert states is not None
+    assert states == {"thumb": True, "index": True, "middle": True,
+                      "ring": True, "pinky": True}
+
+
+def test_finger_states_fist_has_no_finger_up():
+    states = GestureEngine.finger_states(make_hand())
+    assert states is not None
+    assert not any(states.values())
+
+
+def test_finger_states_two_fingers():
+    states = GestureEngine.finger_states(make_hand(up=("index", "middle")))
+    assert states is not None
+    assert states["index"] and states["middle"]
+    assert not (states["thumb"] or states["ring"] or states["pinky"])
+
+
+# ---------------------------------------------- face hold progress (UI)
+def test_smile_progress_grows_then_resets():
+    clock = FakeClock()
+    engine = GestureEngine(clock=clock)
+    smiling = FaceInfo(face_found=True, is_smiling=True)
+    assert engine.smile_progress == 0.0
+    engine.update(None, smiling)
+    clock.advance(0.25)
+    assert 0.0 < engine.smile_progress < 1.0
+    engine.update(None, FaceInfo(face_found=True))        # smile stops
+    assert engine.smile_progress == 0.0
+
+
+def test_blink_progress_grows_then_resets():
+    clock = FakeClock()
+    engine = GestureEngine(clock=clock)
+    closed = FaceInfo(face_found=True, is_eyes_closed=True)
+    assert engine.blink_progress == 0.0
+    engine.update(None, closed)
+    clock.advance(0.25)
+    assert 0.0 < engine.blink_progress < 1.0
+    engine.update(None, FaceInfo(face_found=True))        # eyes open again
+    assert engine.blink_progress == 0.0

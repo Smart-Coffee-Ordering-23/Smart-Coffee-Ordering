@@ -47,6 +47,8 @@ KEY_TO_SCREEN = {
     pygame.K_F8: config.COMPLETE,
 }
 SECTION_LABELS = dict(config.STEP_LABELS)
+MUSIC_SCENE = {config.WELCOME: "welcome", config.SUMMARY: "party", config.COMPLETE: "party"}
+FADE_SECONDS = 0.30          # screen-to-screen cross-fade
 
 
 def clamp(value, low=0.0, high=1.0):
@@ -68,12 +70,18 @@ class CoffeeApp:
         self.clock = pygame.time.Clock()
         self.running = True
 
-        self.menu = MenuManager()
-        self.cart = Cart()
-        self.order_manager = OrderManager()
+        # Sound first: the music starts the moment the app opens, before the
+        # (slower) camera and AI models finish loading.
         self.audio = AudioManager()
         if config.SOUND_AMBIENCE_ENABLED:
             self.audio.start_ambience()   # optional cafe background noise
+        if config.SOUND_MUSIC_ENABLED:
+            self.audio.start_music("welcome")
+        self.audio.play("welcome")        # opening jingle
+
+        self.menu = MenuManager()
+        self.cart = Cart()
+        self.order_manager = OrderManager()
         self.kitchen = KitchenQueue(self.order_manager)
         self.controller = InteractionController(
             self.menu, self.cart, self.order_manager, self.kitchen, self.audio)
@@ -89,6 +97,11 @@ class CoffeeApp:
         self.face_info = None
         self.pointer = None
         self.pointer_from_hand = False
+        self._last_screen = None            # for the screen cross-fade
+        self._previous_frame = None
+        self._fade_started = -10.0
+        self._fade_from = None
+        self._last_hover_id = None
 
         if self.menu.error_message:
             self.controller.set_message(self.menu.error_message)
@@ -107,6 +120,9 @@ class CoffeeApp:
             self.kitchen.update()
             self.handle_kitchen_events()
             self.controller.update()
+            self.audio.update()          # scheduled sounds (ticket + brewing) and music ducking
+            if config.SOUND_MUSIC_ENABLED:
+                self.audio.set_music_scene(MUSIC_SCENE.get(self.controller.screen, "menu"))
             self.draw()
             self.clock.tick(config.FPS)
 
@@ -204,6 +220,10 @@ class CoffeeApp:
             self.controller.hovered_product = hit[1]
         else:
             self.controller.hovered_product = None
+        hover_id = hit[1].id if (hit is not None and hit[0] == "card") else None
+        if hover_id is not None and hover_id != self._last_hover_id:
+            self.audio.play("hover")                    # soft tick when the pointer moves onto a card
+        self._last_hover_id = hover_id
         if hit is not None and hit[0] == "step":
             self.controller.hovered_step = hit[1]
         else:
@@ -250,15 +270,39 @@ class CoffeeApp:
         r.draw_instruction_bar()
         r.draw_sidebar(self.frame, self.hand_landmarks, self.build_debug_rows(),
                        self.engine.progress, ai_ready,
-                       self.hand_landmarks is not None, self.camera_status_message())
+                       self.hand_landmarks is not None, self.camera_status_message(),
+                       GestureEngine.finger_states(self.hand_landmarks),
+                       self.face_display_state())
         r.draw_toast(ctrl.active_message)
+        r.draw_effects()                      # confetti / sparkles above everything
 
         pointer_progress = (self.engine.progress
                             if self.pointer_from_hand and self.engine.stable_gesture == "POINTING"
                             else 0.0)
         if self.pointer is not None and ctrl.screen != config.WELCOME:
             r.draw_pointer(self.pointer, pointer_progress)
+        self.apply_screen_fade()
         pygame.display.flip()
+
+    def apply_screen_fade(self):
+        """Cross-fade from the previous screen so changes glide instead of jump."""
+        screen_now = self.controller.screen
+        area = pygame.Rect(0, config.CONTENT_TOP, MAIN_WIDTH,
+                           config.CONTENT_BOTTOM - config.CONTENT_TOP)
+        if self._last_screen is not None and screen_now != self._last_screen \
+                and self._previous_frame is not None:
+            self._fade_from = self._previous_frame.subsurface(area).copy()
+            self._fade_started = time.monotonic()
+        if screen_now == config.COMPLETE and self._last_screen != config.COMPLETE:
+            self.audio.play("confetti")
+        self._last_screen = screen_now
+        progress = (time.monotonic() - self._fade_started) / FADE_SECONDS
+        if self._fade_from is not None and progress < 1.0:
+            self._fade_from.set_alpha(int(255 * (1.0 - progress) ** 2))
+            self.screen.blit(self._fade_from, area.topleft)
+        else:
+            self._fade_from = None
+        self._previous_frame = self.screen.copy()
 
     def camera_status_message(self):
         """Short status line shown in the camera panel of the sidebar."""
@@ -267,6 +311,16 @@ class CoffeeApp:
         if self.hand_landmarks is not None:
             return "Hand detected"
         return "Show your hand to begin"
+
+    def face_display_state(self):
+        """What the camera panel shows about the face: smile / eyes-closed + hold progress."""
+        face = self.face_info
+        if face is None or not face.face_found:
+            return {"found": False, "smiling": False, "eyes_closed": False,
+                    "smile_progress": 0.0, "blink_progress": 0.0}
+        return {"found": True, "smiling": face.is_smiling, "eyes_closed": face.is_eyes_closed,
+                "smile_progress": self.engine.smile_progress,
+                "blink_progress": self.engine.blink_progress}
 
     def build_debug_rows(self):
         """Technical rows for the camera panel - only drawn in DEBUG_MODE."""
@@ -286,6 +340,11 @@ class CoffeeApp:
             if face is not None and face.face_found
             else "-"
         )
+        eye_ratio = (
+            f"{face.eye_ratio:.2f}"
+            if face is not None and face.face_found
+            else "-"
+        )
 
         return [
             ("Camera", "Connected" if camera_ok else "Not found", camera_ok),
@@ -299,6 +358,7 @@ class CoffeeApp:
             ("Face", "Detected" if face_found else "Not detected", face_found),
             ("Smiling", "Yes" if smiling else "No", smiling),
             ("Smile ratio", smile_ratio, face_found),
+            ("Eye ratio", eye_ratio, face_found),
         ]
 
 
