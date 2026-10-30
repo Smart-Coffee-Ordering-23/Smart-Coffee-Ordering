@@ -32,9 +32,7 @@ import pygame
 
 from src import config
 
-# event name -> file name in assets/sounds/
 SOUND_FILES = {
-    # realistic coffee-shop recordings (this upgrade)
     "select": "coffee_beans.wav",
     "gesture": "gesture_detected.wav",
     "add_cart": "add_to_cart.wav",
@@ -42,15 +40,13 @@ SOUND_FILES = {
     "sent": "coffee_pouring.wav",
     "brew": "coffee_brewing.wav",
     "success": "order_success.wav",
-    "complete": "order_success.wav",   # same file as success - loaded once!
+    "complete": "order_success.wav",  
     "cancel": "cancel.wav",
     "smile": "discount.wav",
     "ambience": "cafe_ambience.wav",
-    # new lively sounds (made by tools/generate_fx_sounds.py)
     "hover": "fx_hover.wav",
     "music": "fx_music.wav",
     "confetti": "fx_confetti.wav",
-    # legacy UI sounds kept from the previous version
     "back": "back.wav",
     "swipe": "swipe.wav",
     "qty_up": "qty_up.wav",
@@ -60,8 +56,6 @@ SOUND_FILES = {
     "welcome": "welcome.wav",
 }
 
-# One signature jingle per coffee (drink_1 ... drink_12), a musical note per cup
-# count (qty_1 ... qty_10) and three music "scenes" that change with the screen.
 for _i in range(1, 13):
     SOUND_FILES[f"drink_{_i}"] = f"fx_drink_{_i}.wav"
 for _i in range(1, 11):
@@ -72,7 +66,6 @@ MUSIC_NAMES = ("music", "music_welcome", "music_party")
 SCENE_TO_MUSIC = {"welcome": "music_welcome", "menu": "music", "party": "music_party"}
 DRINK_JINGLES = 12
 
-
 def find_sound_file(file_name):
     """Path of a sound file. Also accepts browser copies like 'fx_music (1).wav'."""
     path = config.SOUNDS_DIR / file_name
@@ -82,15 +75,9 @@ def find_sound_file(file_name):
         return copy
     return None
 
-
-# If a realistic file is missing, fall back to the older placeholder so
-# the event still makes a sound. coffee_beans.wav is still pending a
-# manual download (see assets/sounds/CREDITS.md).
 SOUND_FALLBACK_FILES = {
     "select": ("select.wav",),
 }
-
-
 class AudioManager:
     """Loads the optional sound effects once and plays them safely."""
 
@@ -98,21 +85,20 @@ class AudioManager:
         self.enabled = config.SOUND_ENABLED
         self.volume = max(0.0, min(1.0, config.SOUND_VOLUME))
         self.mixer_ready = False
-        self.sounds = {}             # event name -> pygame.mixer.Sound (once)
+        self.sounds = {}            
         self.error_message = ""
-        self._scheduled = []         # list of [due_time, name]
-        self._last_played = {}       # name -> monotonic time of last start
-        self._channels = []          # voices currently used (max-voices rule)
+        self._scheduled = []         
+        self._last_played = {}      
+        self._channels = []          
         self._ambience_channel = None
         self._music_channel = None
         self._music_name = None
-        self._duck = 1.0                 # music gets quieter while an effect plays
+        self._duck = 1.0                 
         self._duck_until = 0.0
         if self.enabled:
             self._init_mixer()
             self._load_sounds()
 
-    # ============================================================ setup
     def _init_mixer(self):
         try:
             if not pygame.mixer.get_init():
@@ -127,43 +113,41 @@ class AudioManager:
         """Load every WAV exactly ONCE; several events may share one file."""
         if not self.mixer_ready:
             return
-        loaded_by_file = {}          # file name -> Sound (no double loading)
+        loaded_by_file = {}          
         for name, file_name in SOUND_FILES.items():
-            # a generated "fx_<event>.wav" (livelier set) is preferred when it exists
             candidates = [f"fx_{name}.wav", file_name] + list(SOUND_FALLBACK_FILES.get(name, ()))
             for candidate in candidates:
                 path = find_sound_file(candidate)
                 if path is None:
-                    continue        # missing sound files are fine - stay silent
+                    continue       
                 try:
                     if candidate not in loaded_by_file:
                         loaded_by_file[candidate] = pygame.mixer.Sound(str(path))
                     sound = loaded_by_file[candidate]
                     sound.set_volume(1.0 if name in MUSIC_NAMES else self.volume)
                     self.sounds[name] = sound
-                    break           # primary file preferred over fallback
+                    break           
                 except pygame.error as error:
                     print(f"[AudioManager] Could not load {candidate}: {error}")
-                    continue        # try the next candidate file
+                    continue        
 
     @property
     def is_ready(self):
         return self.mixer_ready and bool(self.sounds)
 
-    # ============================================================ controls
     def set_enabled(self, enabled):
         """Mute/unmute at runtime (the M key). Muting also clears the queue."""
         enabled = bool(enabled)
         if enabled and not self.mixer_ready:
-            self._init_mixer()       # app started silent - wake the mixer up
+            self._init_mixer()       
             self._load_sounds()
         if not enabled:
-            self._scheduled = []      # mute cancels every scheduled sound
+            self._scheduled = []      
             self.stop_ambience()
             self.stop_music()
             if self.mixer_ready:
                 try:
-                    pygame.mixer.stop()   # and cuts short what is playing
+                    pygame.mixer.stop()   
                 except pygame.error:
                     pass
         self.enabled = enabled
@@ -182,8 +166,6 @@ class AudioManager:
     def _ambience_volume(self):
         """Ambience stays quietly in the background."""
         return self.volume * config.SOUND_AMBIENCE_VOLUME
-
-    # ============================================================ playback
     def _voices_in_use(self):
         self._channels = [channel for channel in self._channels if channel.get_busy()]
         return len(self._channels)
@@ -202,16 +184,16 @@ class AudioManager:
             return False
         now = time.monotonic()
         if not force and now - self._last_played.get(name, -10.0) < config.SOUND_RETRIGGER_SECONDS:
-            return False            # anti-spam guard for rapid gestures
+            return False           
         if not force and self._voices_in_use() >= config.SOUND_MAX_VOICES:
-            return False            # never overload the cafe with noise
+            return False            
         try:
             channel = sound.play()
             if channel is not None:
                 self._channels.append(channel)
             self._last_played[name] = now
             if name not in MUSIC_NAMES:
-                self._duck_until = now + 0.8       # music steps back so the effect is heard
+                self._duck_until = now + 0.8      
             return True
         except pygame.error as error:
             print(f"[AudioManager] Could not play '{name}': {error}")
@@ -222,7 +204,7 @@ class AudioManager:
         if not self.enabled:
             return None
         due = time.monotonic() + max(0.0, delay)
-        for entry in self._scheduled:          # ignore duplicate reminders
+        for entry in self._scheduled:          
             if entry[1] == name:
                 return None
         self._scheduled.append([due, name])
@@ -247,8 +229,6 @@ class AudioManager:
                 remaining.append([due, name])
         self._scheduled = remaining
         return started
-
-    # ============================================================ ambience
     def start_ambience(self):
         """Loop the optional cafe background sound (disabled by default)."""
         if not self.enabled or not self.mixer_ready:
@@ -257,9 +237,9 @@ class AudioManager:
             return True             # already running
         sound = self.sounds.get("ambience")
         if sound is None:
-            return False            # file not provided - perfectly fine
+            return False          
         try:
-            self._ambience_channel = sound.play(loops=-1)   # loop forever
+            self._ambience_channel = sound.play(loops=-1)   
             if self._ambience_channel is not None:
                 self._ambience_channel.set_volume(self._ambience_volume())
             return self._ambience_channel is not None
@@ -275,8 +255,6 @@ class AudioManager:
             except pygame.error:
                 pass
             self._ambience_channel = None
-
-    # ============================================================ music
     def _music_volume(self):
         return self.volume * config.SOUND_MUSIC_VOLUME * self._duck
 
@@ -301,7 +279,7 @@ class AudioManager:
             return False
         name = SCENE_TO_MUSIC.get(scene, "music")
         if name not in self.sounds:
-            name = "music"                     # missing scene file -> the main loop
+            name = "music"                    
         if name not in self.sounds:
             return False
         if (name == self._music_name and self._music_channel is not None
@@ -326,8 +304,6 @@ class AudioManager:
                 pass
             self._music_channel = None
             self._music_name = None
-
-    # ============================================================ musical feedback
     def play_drink(self, product_id):
         """Each coffee has its own little jingle. False if the file is missing."""
         number = (int(product_id) - 1) % DRINK_JINGLES + 1

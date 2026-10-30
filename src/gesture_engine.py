@@ -30,53 +30,40 @@ Stability rules (all tunable in config.py):
 import math
 import time
 from collections import Counter, deque
-
 from src import config
 from src.geometry import distance
-
-# MediaPipe point numbers: (mcp, pip, tip) for each of the four fingers
 INDEX = (5, 6, 8)
 MIDDLE = (9, 10, 12)
 RING = (13, 14, 16)
 PINKY = (17, 18, 20)
 
 FINGER_NAMES = ("thumb", "index", "middle", "ring", "pinky")
-
-
 class GestureEngine:
     """Recognizes hand poses, swipes, smiles and blinks - with debounce."""
-
     def __init__(self, clock=None):
-        # The clock is injectable so tests can control time exactly.
         self._clock = clock or time.time
-        # hand pose stability (majority vote + hold time)
         self.recent = deque(maxlen=config.GESTURE_VOTE_FRAMES)
         self.stable_gesture = "NONE"
-        self.previous_gesture = "NONE"     # pose before the last transition (debug)
+        self.previous_gesture = "NONE"     
         self.started_at = self._clock()
         self.has_fired = False
         self.last_event_time = 0.0
-        self.last_event = "NONE"        # last event that fired (debug HUD)
-        self.rejection_reason = "no hand"   # why the pose is not accepted (debug)
-        # per-finger hysteresis states (updated every frame a hand is visible)
+        self.last_event = "NONE"      
+        self.rejection_reason = "no hand"   
         self._finger_up = {name: False for name in FINGER_NAMES}
-        self.hand_missing_frames = 0     # consecutive frames without a hand
-        self.pose_note = ""              # note for an ambiguous pose (debug)
-        # swipe tracking (palm-center positions over time)
+        self.hand_missing_frames = 0     
+        self.pose_note = ""              
         self.motion_history = deque()
         self.swipe_blocked_until = 0.0
         self.swipe_debug = {"state": "idle", "direction": "-", "dx": 0.0,
                             "dy": 0.0, "speed": 0.0, "path_ratio": 0.0}
-        # face events (deliberate smile / blink)
         self.smile_started_at = None
         self.smile_has_fired = False
-        self.smile_frames = 0           # consecutive smiling frames (stability)
-        self.eyes_were_open = False     # a blink needs a confirmed OPEN phase first
-        self.eyes_closed_at = None      # when the current closure started (None = open)
+        self.smile_frames = 0         
+        self.eyes_were_open = False    
+        self.eyes_closed_at = None     
         self.last_blink_time = 0.0
         self.last_face_time = 0.0
-
-    # ============================================================ main entry
     def update(self, landmarks, face_info=None):
         """Call once per frame. Returns the events that fired this frame."""
         events = []
@@ -136,8 +123,6 @@ class GestureEngine:
         if self.eyes_closed_at is None:
             return 0.0
         return min(1.0, (self._clock() - self.eyes_closed_at) / config.BLINK_MAX_SECONDS)
-
-    # ------------------------------------------------------ debug accessors
     @property
     def gesture_confidence(self):
         """Vote share of the current stable pose over the recent frames (0-1)."""
@@ -157,7 +142,6 @@ class GestureEngine:
                 break
             streak += 1
         return streak
-
     @property
     def vote_line(self):
         """Debug text like '9/10' - votes for the stable pose vs window size."""
@@ -170,18 +154,12 @@ class GestureEngine:
     def cooldown_remaining(self):
         """Seconds until another hand-gesture event is allowed."""
         return max(0.0, self.last_event_time + config.GESTURE_COOLDOWN - self._clock())
-
     @property
     def face_cooldown_remaining(self):
         """Seconds until another BLINK is allowed."""
         return max(0.0, self.last_blink_time + config.BLINK_COOLDOWN - self._clock())
-
-    # ============================================================ hand poses
     def _hand_event(self, landmarks):
         if landmarks is None:
-            # One or two missing frames are tolerated (MediaPipe flickers),
-            # but after HAND_LOST_RESET_FRAMES everything starts fresh so a
-            # hold timer can never complete without a visible hand.
             self.hand_missing_frames += 1
             self.rejection_reason = "hand lost"
             if self.hand_missing_frames >= config.HAND_LOST_RESET_FRAMES:
@@ -197,9 +175,6 @@ class GestureEngine:
     def _recognize_hand(self, landmarks):
         """Name the hand pose of ONE frame (and detect swipes over time)."""
         gesture, note = self._classify_pose(landmarks)
-        # Palm motion is tracked for ANY visible pose: a finger that curls for
-        # one frame mid-swipe must not erase the movement history. The swipe
-        # only counts while the hand currently reads as an open palm.
         swipe = self._detect_swipe(landmarks, accept=gesture == "OPEN_PALM")
         if swipe:
             return swipe, note
@@ -223,16 +198,11 @@ class GestureEngine:
         if fingers_up == ["index"]:
             return "POINTING", ""
         if not fingers_up:
-            # All four fingers curled: thumb decides between thumbs up / fist
             if up["thumb"] and self._is_thumb_up(landmarks):
                 return "THUMBS_UP", ""
             return "FIST", ""
-        # Mixed combinations (3 fingers, index+ring, middle only, ...) are
-        # ambiguous - reject them instead of guessing the wrong gesture.
         shown = ", ".join(fingers_up + (["thumb"] if up["thumb"] else []))
         return "NONE", f"unclear: {shown}"
-
-    # ------------------------------------------------------- finger scoring
     def _measure_fingers(self, landmarks):
         """Update and return the per-finger up/down states for this frame."""
         return self._measure_into(landmarks, self._finger_up)
@@ -257,7 +227,6 @@ class GestureEngine:
             state[name] = True
         elif score <= config.FINGER_SCORE_OFF:
             state[name] = False
-        # in between: keep the previous state (no flicker on borderline frames)
         return state[name]
 
     @classmethod
@@ -281,7 +250,7 @@ class GestureEngine:
     @classmethod
     def _thumb_score(cls, landmarks):
         """Thumb extension score (same two cues, reach measured to the palm centre)."""
-        straight = cls._angle_score(landmarks, 2, 3, 4)      # MCP - IP - TIP
+        straight = cls._angle_score(landmarks, 2, 3, 4)    
         palm = max(distance(landmarks[0], landmarks[9]), 1e-6)
         center = cls._palm_center(landmarks)
         reach = (distance(landmarks[4], center)
@@ -293,7 +262,6 @@ class GestureEngine:
     @staticmethod
     def _angle_score(landmarks, mcp_i, pip_i, tip_i):
         """1.0 = straight finger at the PIP joint, 0.0 = fully folded.
-
         Pure geometry - unaffected by hand rotation, distance to the camera
         or left/right handedness.
         """
@@ -302,7 +270,7 @@ class GestureEngine:
         b = distance(pip, tip)
         c = distance(mcp, tip)
         if a < 1e-6 or b < 1e-6:
-            return 1.0 if (a + b + c) > 1e-6 else 0.0   # degenerate: reach decides
+            return 1.0 if (a + b + c) > 1e-6 else 0.0   
         cosine = (a * a + b * b - c * c) / (2.0 * a * b)
         cosine = max(-1.0, min(1.0, cosine))
         return math.acos(cosine) / math.pi
@@ -315,7 +283,6 @@ class GestureEngine:
         y = sum(landmarks[i][1] for i in indexes) / len(indexes)
         return (x, y)
 
-    # ---------------------------------------------------- thumb & display
     def current_finger_states(self, landmarks):
         """Live hysteresis states for the camera panel (what the engine used).
 
@@ -363,8 +330,6 @@ class GestureEngine:
         thumb_tip = along(landmarks[4])
         index_knuckle = along(landmarks[5])
         return thumb_tip >= index_knuckle + config.THUMB_UP_OVER_KNUCKLE * axis_len
-
-    # ============================================================== swipes
     def _detect_swipe(self, landmarks, accept):
         """Watch the palm centre move sideways FAST and return a swipe, or None.
 
@@ -380,8 +345,6 @@ class GestureEngine:
         now = self._clock()
         center = self._palm_center(landmarks)
         self.motion_history.append((now, center[0], center[1]))
-
-        # Forget positions older than SWIPE_TIME
         while self.motion_history and now - self.motion_history[0][0] > config.SWIPE_TIME:
             self.motion_history.popleft()
 
@@ -389,7 +352,7 @@ class GestureEngine:
         move_x = center[0] - start_x
         move_y = center[1] - start_y
         elapsed = max(now - start_time, 1e-6)
-        speed = abs(move_x) / elapsed               # frame widths per second
+        speed = abs(move_x) / elapsed              
         path = self._path_length()
         ratio = math.hypot(move_x, move_y) / path if path > 1e-9 else 0.0
         self.swipe_debug.update(dx=move_x, dy=move_y, speed=speed,
@@ -407,9 +370,9 @@ class GestureEngine:
             return None
 
         is_wide_enough = abs(move_x) >= config.SWIPE_DISTANCE
-        is_fast_enough = speed >= config.SWIPE_MIN_SPEED       # slow drifts are ignored
+        is_fast_enough = speed >= config.SWIPE_MIN_SPEED       
         is_mostly_horizontal = abs(move_y) < abs(move_x) * config.SWIPE_MAX_VERTICAL_RATIO
-        is_consistent = ratio >= config.SWIPE_MIN_PATH_RATIO   # jitter is not a swipe
+        is_consistent = ratio >= config.SWIPE_MIN_PATH_RATIO   
         if not is_wide_enough:
             self.swipe_debug["state"] = f"too short {abs(move_x):.2f}" \
                                         f"<{config.SWIPE_DISTANCE:.2f}"
@@ -425,11 +388,9 @@ class GestureEngine:
             self.swipe_debug["state"] = f"jittery {ratio:.2f}" \
                                         f"<{config.SWIPE_MIN_PATH_RATIO:.2f}"
             return None
-
         self.motion_history.clear()
-        self.swipe_blocked_until = now + config.SWIPE_COOLDOWN   # prevents repeated swipes
+        self.swipe_blocked_until = now + config.SWIPE_COOLDOWN  
         self.swipe_debug["state"] = "fired"
-        # The camera image is already mirrored, so moving right on screen = user's right
         return "SWIPE_RIGHT" if move_x > 0 else "SWIPE_LEFT"
 
     def _path_length(self):
@@ -441,7 +402,6 @@ class GestureEngine:
                 path += math.hypot(x - previous[0], y - previous[1])
             previous = (x, y)
         return path
-
     @staticmethod
     def _arrow(move_x, move_y):
         """Movement direction as an arrow for the debug HUD."""
@@ -450,8 +410,6 @@ class GestureEngine:
         if abs(move_x) >= abs(move_y):
             return "right" if move_x > 0 else "left"
         return "down" if move_y > 0 else "up"
-
-    # ============================================================ debounce
     def _stabilize(self, raw_gesture, note=""):
         """Majority vote + confidence + hold + cooldown -> ONE event, or None.
 
@@ -502,13 +460,12 @@ class GestureEngine:
         now = self._clock()
         self.recent.append("OPEN_PALM")
         self.stable_gesture = "OPEN_PALM"
-        self.has_fired = True    # holding the palm after a swipe must not open anything
+        self.has_fired = True    
         if now - self.last_event_time < config.GESTURE_COOLDOWN:
             return None
         self.last_event_time = now
         return swipe
 
-    # ============================================================ face events
     def _face_events(self, face_info):
         """Turn smile / eye measurements into SMILE and BLINK events."""
         now = self._clock()
@@ -518,9 +475,6 @@ class GestureEngine:
         self.last_face_time = now
         events = []
 
-        # SMILE: a stable run of smiling frames, held briefly, then fires ONCE
-        # (smile_has_fired stays True while the smile continues, so a customer
-        # cannot keep earning the discount by not stopping smiling).
         if face_info.is_smiling:
             self.smile_frames += 1
             if self.smile_started_at is None:
@@ -534,11 +488,6 @@ class GestureEngine:
             self.smile_started_at = None
             self.smile_has_fired = False
             self.smile_frames = 0
-
-        # BLINK: a complete OPEN -> CLOSED -> OPEN cycle lasting between
-        # BLINK_MIN_SECONDS and BLINK_MAX_SECONDS. Eyes kept closed for
-        # longer than MAX are NOT a blink; a closure only starts after the
-        # eyes were seen open (never from a lost/unknown face).
         if face_info.is_eyes_closed:
             if self.eyes_closed_at is None and self.eyes_were_open:
                 self.eyes_closed_at = now      # this closure counts
@@ -551,7 +500,6 @@ class GestureEngine:
                         and now - self.last_blink_time >= config.BLINK_COOLDOWN):
                     self.last_blink_time = now
                     events.append("BLINK")
-
         return events
 
     def _face_lost(self, now):
@@ -561,7 +509,7 @@ class GestureEngine:
         self.smile_frames = 0
         lost_for = now - self.last_face_time
         if self.eyes_closed_at is not None and lost_for <= config.FACE_LOST_GRACE_SECONDS:
-            return []       # MediaPipe flicker while blinking - keep waiting
+            return []       
         self.eyes_closed_at = None
-        self.eyes_were_open = False   # must see open eyes again before another blink
+        self.eyes_were_open = False   
         return []

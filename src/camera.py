@@ -19,9 +19,7 @@ import cv2
 
 from src import config
 
-MAX_FAILED_READS = 30  # after this many failed reads in a row we treat the camera as lost
-
-
+MAX_FAILED_READS = 30 
 class Camera:
     def __init__(self, camera_index=0, width=config.CAMERA_WIDTH, height=config.CAMERA_HEIGHT):
         self.capture = None
@@ -30,23 +28,21 @@ class Camera:
         self.width = width
         self.height = height
         self._camera_index = camera_index
-        self._lock = threading.Lock()          # newest frame handover
-        self._capture_lock = threading.RLock() # serializes open/close (thread vs main)
-        self._latest = None            # (frame, timestamp) newest grabbed image
+        self._lock = threading.Lock()        
+        self._capture_lock = threading.RLock() 
+        self._latest = None            
         self._running = False
         self._thread = None
         self._reconnect_at = 0.0
         self._open(camera_index, width, height)
         self._start_thread()
 
-    # ------------------------------------------------------------- opening
     def _open(self, camera_index, width, height):
         with self._capture_lock:
-            # On Windows, the DirectShow backend opens the camera much faster.
             backend = cv2.CAP_DSHOW if sys.platform.startswith("win") else cv2.CAP_ANY
             try:
                 capture = cv2.VideoCapture(camera_index, backend)
-            except Exception as error:  # OpenCV can raise unexpected errors on some systems
+            except Exception as error: 
                 self._set_error(f"Could not start the camera: {error}")
                 return
 
@@ -58,25 +54,24 @@ class Camera:
 
             capture.set(cv2.CAP_PROP_FRAME_WIDTH, width)
             capture.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-            capture.set(cv2.CAP_PROP_BUFFERSIZE, config.CAMERA_BUFFER_FRAMES)  # freshest frame only
+            capture.set(cv2.CAP_PROP_BUFFERSIZE, config.CAMERA_BUFFER_FRAMES)  
             self.capture = capture
             self.failed_reads = 0
             self.error_message = ""
 
     def _set_error(self, message):
-        if message != self.error_message:      # print only on state changes
+        if message != self.error_message:      
             print(f"[Camera] {message}")
         self.error_message = message
 
     def _start_thread(self):
         if self._thread is not None and self._thread.is_alive():
-            return                             # never start a second capture thread
+            return                           
         self._running = True
         self._thread = threading.Thread(target=self._capture_loop,
                                         name="camera-capture", daemon=True)
         self._thread.start()
 
-    # -------------------------------------------------------- capture loop
     def _capture_loop(self):
         """Grab frames continuously; reconnect automatically after a dropout."""
         while self._running:
@@ -104,7 +99,7 @@ class Camera:
                 continue
 
             self.failed_reads = 0
-            frame = cv2.flip(frame, 1)          # flip left-right so it acts like a mirror
+            frame = cv2.flip(frame, 1)          
             with self._lock:
                 self._latest = (frame, time.monotonic())
 
@@ -115,8 +110,6 @@ class Camera:
                 self.capture = None
             with self._lock:
                 self._latest = None
-
-    # -------------------------------------------------------------- public
     @property
     def is_connected(self):
         return self.capture is not None
@@ -129,13 +122,13 @@ class Camera:
             return None
         frame, taken_at = latest
         if time.monotonic() - taken_at > config.CAMERA_FRAME_STALE_SECONDS:
-            return None                     # frozen image - do not drive gestures from it
+            return None                    
         return frame
 
     def release(self):
         self._running = False
         thread = self._thread
         if thread is not None and thread.is_alive():
-            thread.join(timeout=2.0)         # never hang the app on exit
+            thread.join(timeout=2.0)        
         self._thread = None
         self._close_capture()

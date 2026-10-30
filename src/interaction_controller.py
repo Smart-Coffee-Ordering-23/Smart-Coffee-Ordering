@@ -1,23 +1,15 @@
 """InteractionController - connects recognized gestures to application actions.
-
     Gesture  ->  InteractionController  ->  application action
-
 Example: the event "POINTING" selects the coffee card under the finger.
-
 This file contains NO drawing code and NO SQL - the database work is
 delegated to OrderManager. Its main job is translating recognized
 gestures (and mouse/keyboard commands) into application actions.
 """
 import time
-
 from src import config
 from src.order_manager import format_order_number
-
-
 class InteractionController:
     """Holds the current screen and applies every action of the order flow."""
-
-    # Where the BLINK ("go back") event leads from each screen
     BACK_SCREEN = {
         config.MENU: config.WELCOME,
         config.SELECT: config.MENU,
@@ -33,20 +25,14 @@ class InteractionController:
         self.kitchen = kitchen_queue
         self.audio = audio
         self._clock = clock or time.time
-
-        # current state of the flow
         self.screen = config.WELCOME
         self.quantity = 1
         self.order_id = None
         self.message = ""
         self.message_until = 0.0
         self.complete_started_at = 0.0
-
-        # what the user is pointing at (updated by main.py every frame)
         self.hovered_product = None
         self.hovered_step = None
-
-    # ============================================================ helpers
     def set_message(self, text):
         self.message = text
         self.message_until = self._clock() + config.MESSAGE_SECONDS
@@ -77,21 +63,17 @@ class InteractionController:
         """Schedule a sound `delay` seconds from now (order success sequence)."""
         if self.audio is not None and hasattr(self.audio, "play_later"):
             self.audio.play_later(name, delay)
-
-    # ============================================================ dispatch
     def handle_event(self, event):
         """Apply one gesture/keyboard event.
 
         Returns False only when the action failed and the gesture should
         be allowed to try again (the engine is then re-armed by main.py).
         """
-        # Pointing at the step rail at the top jumps straight to that screen
         if event == "POINTING" and self.hovered_step is not None:
             if self.hovered_step != self.screen:
                 self.go_to_screen(self.hovered_step)
                 self._sound("gesture")
             return True
-        # Swiping moves between screens (Menu and Quantity use swipes first)
         if event in ("SWIPE_LEFT", "SWIPE_RIGHT") and self.screen not in (config.MENU, config.QUANTITY):
             self._swipe_between_screens(event)
             return True
@@ -104,7 +86,6 @@ class InteractionController:
         if event == "SMILE":
             self._apply_smile_discount()
             return True
-
         handler = {
             config.WELCOME: self._on_welcome,
             config.MENU: self._on_menu,
@@ -116,36 +97,33 @@ class InteractionController:
             config.COMPLETE: self._on_complete,
         }[self.screen]
         return handler(event)
-
-    # ============================================================ screens
     def _on_welcome(self, event):
         if event == "OPEN_PALM":
             self.screen = config.MENU
             self._sound("gesture")
             self.set_message("Menu opened - point at a coffee")
         return True
-
     def _on_menu(self, event):
         if event == "SWIPE_RIGHT":
             if self.menu.next_page():
-                self._sound("swipe")        # whoosh: next page of coffees
+                self._sound("swipe")        
             else:
                 self._swipe_between_screens(event)
         elif event == "SWIPE_LEFT":
             if self.menu.previous_page():
-                self._sound("swipe")        # whoosh: previous page of coffees
+                self._sound("swipe")        
             else:
                 self._swipe_between_screens(event)
         elif event == "POINTING":
             if self.hovered_product is None:
                 self.set_message("Point your finger at a coffee card")
-                self._sound("error")        # soft friendly hint, no harsh beep
-                return False        # let POINTING try again
+                self._sound("error")       
+                return False        
             self.select_product(self.hovered_product)
         elif event == "THUMBS_UP":
             if self.cart.is_empty():
                 self.set_message("Point at a coffee first")
-                self._sound("empty")        # subtle: nothing to check out yet
+                self._sound("empty")       
             else:
                 self.go_to_screen(config.CONFIRM)
                 self._sound("gesture")
@@ -154,29 +132,28 @@ class InteractionController:
     def _on_select(self, event):
         if event == "THUMBS_UP":
             self.screen = config.QUANTITY
-            self._sound("cup")          # the cup is placed on the scale
+            self._sound("cup")          
         return True
-
     def _on_quantity(self, event):
         if event == "TWO_FINGERS":
             if self.quantity < config.MAX_QUANTITY:
                 self.quantity += 1
                 self._qty_sound(1)
             else:
-                self.quantity = 1                 # wraps back to one cup
+                self.quantity = 1                
                 self._qty_sound(-1)
         elif event == "SWIPE_RIGHT":
             if self.quantity < config.MAX_QUANTITY:
                 self.quantity += 1
                 self._qty_sound(1)
             else:
-                self._swipe_between_screens(event)   # already at the maximum
+                self._swipe_between_screens(event)  
         elif event == "SWIPE_LEFT":
             if self.quantity > 1:
                 self.quantity -= 1
                 self._qty_sound(-1)
             else:
-                self._swipe_between_screens(event)   # already at 1
+                self._swipe_between_screens(event)   
         elif event == "THUMBS_UP":
             self._add_selected_to_cart()
         return True
@@ -184,9 +161,9 @@ class InteractionController:
     def _on_discount(self, event):
         if event == "THUMBS_UP":
             self.go_to_screen(config.CONFIRM)
-            self._sound("gesture")             # soft blip: on to Confirm
+            self._sound("gesture")             
         elif event == "OPEN_PALM":
-            self.screen = config.MENU      # add another coffee to the same order
+            self.screen = config.MENU      
             self._sound("gesture")
         return True
 
@@ -199,7 +176,7 @@ class InteractionController:
         if event == "THUMBS_UP":
             self.screen = config.COMPLETE
             self.complete_started_at = self._clock()
-            self._sound("confirm")             # gentle ding on the Thank-you screen
+            self._sound("confirm")             
             self.set_message("Enjoy your coffee!")
         return True
 
@@ -207,8 +184,6 @@ class InteractionController:
         if event == "OPEN_PALM":
             self.start_new_order()
         return True
-
-    # ============================================================ actions
     def select_product(self, product):
         """POINTING / clicking a card: choose this coffee."""
         if product is None:
@@ -218,7 +193,7 @@ class InteractionController:
         self.screen = config.SELECT
         play_drink = getattr(self.audio, "play_drink", None)
         if not (callable(play_drink) and play_drink(product.id)):
-            self._sound("select")             # no jingle file -> the normal pop
+            self._sound("select")            
         self.set_message(f"{product.name} selected")
         return True
 
@@ -234,7 +209,7 @@ class InteractionController:
             self.set_message(str(error))
             return False
         self.screen = config.DISCOUNT
-        self._sound("add_cart")        # short cup clink: the coffee is in the cart
+        self._sound("add_cart")        
         self.set_message(f"{product.name} x {self.quantity} added")
         return True
 
@@ -246,22 +221,20 @@ class InteractionController:
         reused instead of writing a duplicate order with the same cart.
         """
         if self.order_id is not None:
-            return True                # already confirmed - never save twice
+            return True                
         if self.cart.is_empty():
-            self._sound("empty")       # very subtle hint, never a harsh error
+            self._sound("empty")      
             self.set_message("Your order is empty")
             return False
         order_id = self.order_manager.create_order(self.cart)
         if order_id is None:
-            self._sound("error")       # soft friendly "could not do that"
+            self._sound("error")       
             self.set_message(self.order_manager.error_message or "Could not save the order")
             return False
         self.order_id = order_id
         self.kitchen.enqueue(order_id)
         self.screen = config.SUMMARY
-        self._sound("success")         # short coffee-shop celebration
-        # Small audio story, spaced out so the parts never overlap:
-        # celebration -> ticket sent to the barista -> machine starts brewing.
+        self._sound("success")        
         self._play_later("sent", 1.1)
         self._play_later("brew", 1.9)
         self.set_message(f"Order {format_order_number(order_id)} confirmed")
@@ -272,7 +245,7 @@ class InteractionController:
         if self.screen not in (config.DISCOUNT, config.CONFIRM):
             return False
         if self.cart.apply_discount():
-            self._sound("smile")       # cheerful - the fun moment of the app
+            self._sound("smile")       
             self.set_message(f"Nice smile! ☕ {config.DISCOUNT_PERCENT}% OFF!")
         elif self.cart.discount_applied:
             self.set_message("The discount was already applied")
@@ -281,15 +254,15 @@ class InteractionController:
     def go_back(self):
         """BLINK: return to the previous screen."""
         if self.screen not in self.BACK_SCREEN:
-            self._sound("error")       # soft friendly hint - no warning beep
+            self._sound("error")       
             self.set_message("You cannot go back from here")
             return
-        if self.screen == config.DISCOUNT:      # undo the coffee we just added
+        if self.screen == config.DISCOUNT:     
             product = self.menu.selected_product
             if product is not None:
                 self.cart.remove_product(product.name, self.quantity)
         self.screen = self.BACK_SCREEN[self.screen]
-        self._sound("back")            # short reverse whoosh
+        self._sound("back")            
 
     def cancel(self):
         """FIST: cancel the current choice or clear the whole order."""
@@ -339,7 +312,6 @@ class InteractionController:
         if screen_name == config.WELCOME or (
             self.order_id is not None and screen_name not in (config.SUMMARY, config.COMPLETE)
         ):
-            # Welcome = new customer; a confirmed order cannot change
             self._reset_order()
         if screen_name not in (config.WELCOME, config.MENU) and self.menu.selected_product is None:
             sample = self.menu.products[2] if len(self.menu.products) > 2 else (
@@ -367,7 +339,7 @@ class InteractionController:
         self._reset_order()
         self.message = ""
         self.screen = config.WELCOME
-        self._sound("welcome")         # a new customer walks into the shop
+        self._sound("welcome")         
 
     def _reset_order(self):
         self.cart.clear()
@@ -375,8 +347,6 @@ class InteractionController:
         self.menu.go_to_page(0)
         self.quantity = 1
         self.order_id = None
-
-    # ============================================================ mouse bridge
     def perform(self, action, value=None):
         """Run a button action coming from the mouse (or another direct command).
 
@@ -394,12 +364,12 @@ class InteractionController:
             if not self.menu.previous_page():
                 self.set_message("You are on the first page")
             else:
-                self._sound("swipe")        # whoosh: previous coffee page
+                self._sound("swipe")        
         elif action == "next_page":
             if not self.menu.next_page():
                 self.set_message("You are on the last page")
             else:
-                self._sound("swipe")        # whoosh: next coffee page
+                self._sound("swipe")       
         elif action == "qty_minus":
             if self.quantity > 1:
                 self.quantity -= 1

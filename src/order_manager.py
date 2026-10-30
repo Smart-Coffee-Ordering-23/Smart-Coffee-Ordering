@@ -1,9 +1,7 @@
 """OrderManager - saves and reads orders in SQLite (data/orders.db).
-
 Tables:
     orders      - order ID, date/time, subtotal, discount, total, status
     order_items - order ID, product ID, product name, quantity, price
-
 All SQL uses parameterized queries (no string building with user input).
 If the database cannot be used the app keeps running and error_message
 explains the problem.
@@ -11,14 +9,10 @@ explains the problem.
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-
 from src import config
-
-# Order statuses used across the project
 STATUS_CONFIRMED = "Confirmed"
 STATUS_PREPARING = "Preparing"
 STATUS_COMPLETED = "Completed"
-
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS orders (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,22 +33,16 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 """
 
-
 def format_order_number(order_id):
     """Turn the database id 1 into '#001'."""
     return f"#{int(order_id):03d}"
-
-
 class OrderManager:
     """Creates, saves and updates orders in the local SQLite database."""
-
     def __init__(self, db_path=None):
         self.db_path = Path(db_path) if db_path else config.DATABASE_FILE
         self.connection = None
         self.error_message = ""
         self._connect()
-
-    # ------------------------------------------------------------- connection
     def _connect(self):
         try:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,11 +59,8 @@ class OrderManager:
     @property
     def is_available(self):
         return self.connection is not None
-
-    # ------------------------------------------------------------- creating
     def create_order(self, cart):
         """Save a confirmed cart as a new order.
-
         Returns the new order id (int), or None when the database failed.
         """
         if self.connection is None or cart.is_empty():
@@ -108,8 +93,6 @@ class OrderManager:
             self.error_message = f"Could not save the order: {error}"
             print(f"[OrderManager] {self.error_message}")
             return None
-
-    # ------------------------------------------------------------- reading
     def get_order(self, order_id):
         """Return one order as a dict with its items, or None."""
         if self.connection is None:
@@ -158,8 +141,6 @@ class OrderManager:
             return int(row["n"])
         except sqlite3.Error:
             return 0
-
-    # ------------------------------------------------------------- status
     def update_status(self, order_id, status):
         """Update the status of an order. Returns True on success."""
         if self.connection is None:

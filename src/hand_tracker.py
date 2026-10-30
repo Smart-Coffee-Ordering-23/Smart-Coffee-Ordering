@@ -14,10 +14,8 @@ from src.geometry import distance
 
 try:
     import mediapipe as mp
-except ImportError:          # MediaPipe is not installed
+except ImportError:
     mp = None
-
-
 def mediapipe_problem():
     """None when MediaPipe is usable, otherwise a friendly error message.
 
@@ -27,7 +25,6 @@ def mediapipe_problem():
         return ("MediaPipe is missing or the wrong version. "
                 "Run: python -m pip install -r requirements.txt")
     return None
-
 
 def _connection_pairs(*set_names):
     """Flatten MediaPipe connection sets into plain (a, b) tuples.
@@ -46,25 +43,19 @@ def _connection_pairs(*set_names):
             pairs.add(tuple(sorted(connection)))
     return tuple(sorted(pairs))
 
-
-# Debug-only face outline: oval + eyes + lips (MediaPipe's own definitions)
 FACE_DEBUG_LINES = _connection_pairs("FACEMESH_FACE_OVAL", "FACEMESH_LEFT_EYE",
                                      "FACEMESH_RIGHT_EYE", "FACEMESH_LIPS")
-
-
 @dataclass
 class FaceInfo:
     """Simple measurements taken from one camera frame."""
     face_found: bool = False
-    is_smiling: bool = False        # True while the person is smiling
-    is_eyes_closed: bool = False    # True while the eyes are closed
-    smile_ratio: float = 0.0        # mouth width / face width (debug view)
-    eye_ratio: float = 0.0          # Eye Aspect Ratio (debug view)
-    smile_lift: float = 0.0         # nose-tip -> mouth-corner gap / face height
-    smile_threshold: float = 0.0    # effective width threshold this frame
-    eye_open: bool = False          # explicit OPEN/CLOSED for the debug HUD
-
-
+    is_smiling: bool = False        
+    is_eyes_closed: bool = False    
+    smile_ratio: float = 0.0        
+    eye_ratio: float = 0.0          
+    smile_lift: float = 0.0        
+    smile_threshold: float = 0.0   
+    eye_open: bool = False          
 class HandTracker:
     """Finds the clearest hand in a camera frame using MediaPipe Hands.
 
@@ -73,13 +64,12 @@ class HandTracker:
     rule in GestureEngine is handedness-neutral. The handedness label is only
     used for display and for picking the clearest of several detected hands.
     """
-
     def __init__(self):
         self.hands = None
         self.error_message = ""
-        self.last_confidence = 0.0     # MediaPipe score of the selected hand
-        self.last_handedness = "-"     # "Left" / "Right" of the selected hand
-        self.last_palm_size = 0.0      # normalized wrist->knuckle distance
+        self.last_confidence = 0.0    
+        self.last_handedness = "-"     
+        self.last_palm_size = 0.0     
 
         problem = mediapipe_problem()
         if problem:
@@ -90,12 +80,12 @@ class HandTracker:
         try:
             self.hands = mp.solutions.hands.Hands(  # type: ignore[union-attr,attr-defined]
                 static_image_mode=False,
-                max_num_hands=config.HAND_MAX_NUM_HANDS,   # 2 = we can pick the clearest
-                model_complexity=0,         # 0 = fastest model
+                max_num_hands=config.HAND_MAX_NUM_HANDS,  
+                model_complexity=0,         
                 min_detection_confidence=config.HAND_MIN_DETECTION_CONFIDENCE,
                 min_tracking_confidence=config.HAND_MIN_TRACKING_CONFIDENCE,
             )
-        except Exception as error:          # never crash on a broken machine setup
+        except Exception as error:         
             self.error_message = f"Could not start hand tracking: {error}"
             print(f"[HandTracker] {self.error_message}")
 
@@ -116,8 +106,8 @@ class HandTracker:
             self._forget()
             return None
         try:
-            result = self.hands.process(rgb_frame)   # frame is already RGB
-        except Exception as error:          # a detection failure must not crash the app
+            result = self.hands.process(rgb_frame)   
+        except Exception as error:          
             self.error_message = f"Hand tracking error: {error}"
             print(f"[HandTracker] {self.error_message}")
             self._forget()
@@ -133,9 +123,9 @@ class HandTracker:
             points = [(point.x, point.y) for point in hand.landmark]
             score, label = self._handedness(result, index)
             if score < config.HAND_MIN_SCORE:
-                continue                    # MediaPipe is not sure this is a hand
+                continue                    
             if not self._landmarks_plausible(points):
-                continue                    # incomplete / too small / out of frame
+                continue                   
             candidates.append((points, score, label, self._palm_size(points)))
         if not candidates:
             self._forget()
@@ -152,7 +142,6 @@ class HandTracker:
         self.last_handedness = "-"
         self.last_palm_size = 0.0
 
-    # -------------------------------------------------------- static helpers
     @staticmethod
     def _handedness(result, index):
         """(score, "Left"/"Right") of the index-th detected hand."""
@@ -160,7 +149,7 @@ class HandTracker:
             classification = result.multi_handedness[index].classification[0]
             return classification.score, classification.label
         except (AttributeError, IndexError, TypeError):
-            return 1.0, "-"                 # older MediaPipe without handedness
+            return 1.0, "-"                 
 
     @staticmethod
     def _palm_size(points):
@@ -177,7 +166,7 @@ class HandTracker:
         margin = config.HAND_LANDMARK_MARGIN
         for x, y in points:
             if not (-margin <= x <= 1.0 + margin and -margin <= y <= 1.0 + margin):
-                return False                # landmark far outside the frame
+                return False                
         return HandTracker._palm_size(points) >= config.HAND_MIN_PALM_SIZE
 
     @staticmethod
@@ -188,24 +177,18 @@ class HandTracker:
             if (candidate[1], candidate[3]) > (best[1], best[3]):
                 best = candidate
         return best
-
     def close(self):
         if self.hands is not None:
             self.hands.close()
             self.hands = None
 
-
-# ===================================================================== face
-# MediaPipe Face Mesh point numbers
-LEFT_EYE = (33, 160, 158, 133, 153, 144)      # corner, top1, top2, corner, bottom2, bottom1
+LEFT_EYE = (33, 160, 158, 133, 153, 144)     
 RIGHT_EYE = (362, 385, 387, 263, 373, 380)
 MOUTH_CORNERS = (61, 291)
 FACE_EDGES = (234, 454)
-NOSE_TIP = 1              # the corners rise toward it when smiling
-FOREHEAD_TOP = 10         # with CHIN these define the face height for normalization
+NOSE_TIP = 1              
+FOREHEAD_TOP = 10         
 CHIN_BOTTOM = 152
-
-
 class FaceTracker:
     """Measures smile and eye state using MediaPipe Face Mesh.
 
@@ -220,11 +203,11 @@ class FaceTracker:
     def __init__(self):
         self.face_mesh = None
         self.error_message = ""
-        self.last_points = None        # normalized (x, y) points of the last face (debug)
-        self._open_history = deque(maxlen=config.EYE_BASELINE_FRAMES)   # recent "eyes open" values
-        self._recent_eye = deque(maxlen=config.EYE_SMOOTH_FRAMES)       # for smoothing
-        self._width_history = deque(maxlen=config.SMILE_BASELINE_FRAMES)   # neutral mouth widths
-        self._lift_history = deque(maxlen=config.SMILE_BASELINE_FRAMES)    # neutral corner gaps
+        self.last_points = None        
+        self._open_history = deque(maxlen=config.EYE_BASELINE_FRAMES)   
+        self._recent_eye = deque(maxlen=config.EYE_SMOOTH_FRAMES)       
+        self._width_history = deque(maxlen=config.SMILE_BASELINE_FRAMES)   
+        self._lift_history = deque(maxlen=config.SMILE_BASELINE_FRAMES)    
 
         problem = mediapipe_problem()
         if problem:
@@ -236,11 +219,11 @@ class FaceTracker:
             self.face_mesh = mp.solutions.face_mesh.FaceMesh(  # type: ignore[union-attr,attr-defined]
                 static_image_mode=False,
                 max_num_faces=1,
-                refine_landmarks=True,      # more accurate eyelids -> better closed-eye detection
+                refine_landmarks=True,      
                 min_detection_confidence=0.5,
                 min_tracking_confidence=0.5,
             )
-        except Exception as error:          # never crash on a broken machine setup
+        except Exception as error:          
             self.error_message = f"Could not start face tracking: {error}"
             print(f"[FaceTracker] {self.error_message}")
 
@@ -253,7 +236,7 @@ class FaceTracker:
         if self.face_mesh is None or rgb_frame is None:
             return FaceInfo()
         try:
-            result = self.face_mesh.process(rgb_frame)   # already RGB - no conversion
+            result = self.face_mesh.process(rgb_frame)   
         except Exception as error:
             self.error_message = f"Face tracking error: {error}"
             print(f"[FaceTracker] {self.error_message}")
@@ -261,16 +244,15 @@ class FaceTracker:
         if not result.multi_face_landmarks:
             self._recent_eye.clear()
             self.last_points = None
-            return FaceInfo()          # no face -> everything False
+            return FaceInfo()          
 
         height, width = rgb_frame.shape[:2]
         raw = result.multi_face_landmarks[0].landmark
         points = [(p.x * width, p.y * height) for p in raw]
-        self.last_points = [(p.x, p.y) for p in raw]      # normalized, for the debug overlay
-
+        self.last_points = [(p.x, p.y) for p in raw]      
         width_ratio, lift_ratio = self._smile_metrics(points)
         self._recent_eye.append(self._get_eye_ratio(points))
-        eye_ratio = sum(self._recent_eye) / len(self._recent_eye)      # smoothed
+        eye_ratio = sum(self._recent_eye) / len(self._recent_eye)     
         is_closed = self._is_closed(eye_ratio)
 
         smiling, effective_threshold = self._classify_smile(width_ratio, lift_ratio)
@@ -285,7 +267,6 @@ class FaceTracker:
             eye_open=not is_closed,
         )
 
-    # ------------------------------------------------------------ smile
     def _classify_smile(self, width_ratio, lift_ratio):
         """Decide 'smiling' from BOTH measurements; returns (bool, width_threshold).
 
@@ -297,8 +278,7 @@ class FaceTracker:
             (the corners must actually RISE - a wide neutral mouth fails here).
         """
         baseline_width, baseline_lift = self._smile_baseline()
-        if baseline_width is None:
-            # First second: only the absolute floor, while the baseline fills up.
+        if baseline_width is None or baseline_lift is None:
             self._width_history.append(width_ratio)
             self._lift_history.append(lift_ratio)
             return width_ratio >= config.SMILE_WIDTH_THRESHOLD, config.SMILE_WIDTH_THRESHOLD
@@ -307,7 +287,7 @@ class FaceTracker:
         width_ok = width_ratio >= threshold or width_ratio >= config.SMILE_WIDTH_THRESHOLD
         lift_ok = lift_ratio <= baseline_lift * (1.0 - config.SMILE_LIFT_DROP_RATIO)
         smiling = width_ok and lift_ok
-        if not smiling:                     # only neutral frames teach the baseline
+        if not smiling:                    
             self._width_history.append(width_ratio)
             self._lift_history.append(lift_ratio)
         return smiling, threshold
@@ -337,13 +317,12 @@ class FaceTracker:
             self._open_history.append(eye_ratio)
             return eye_ratio < config.EYE_CLOSED_THRESHOLD
         ordered = sorted(self._open_history)
-        baseline = ordered[int(len(ordered) * 0.8)]        # typical OPEN value
+        baseline = ordered[int(len(ordered) * 0.8)]       
         closed = eye_ratio < baseline * config.EYE_CLOSED_RELATIVE
-        if not closed:                                     # closed frames must not lower the baseline
+        if not closed:                                     
             self._open_history.append(eye_ratio)
         return closed
 
-    # ------------------------------------------------------- measurements
     @staticmethod
     def _smile_metrics(points):
         """(mouth width ratio, corner lift ratio) for one face.

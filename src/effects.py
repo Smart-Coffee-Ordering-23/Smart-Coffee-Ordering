@@ -34,11 +34,9 @@ SPARKLE_COLORS = ((255, 214, 102), (255, 236, 170), (232, 180, 76))
 def clamp01(value):
     return max(0.0, min(1.0, value))
 
-
 def ease_out_cubic(t):
     t = clamp01(t)
     return 1.0 - (1.0 - t) ** 3
-
 
 def ease_out_back(t):
     """Fast start, tiny overshoot, settle - the 'pop' used for cards and badges."""
@@ -46,8 +44,6 @@ def ease_out_back(t):
     c1 = 1.70158
     c3 = c1 + 1.0
     return 1.0 + c3 * (t - 1.0) ** 3 + c1 * (t - 1.0) ** 2
-
-
 class Particle:
     __slots__ = ("x", "y", "vx", "vy", "age", "life", "size", "color",
                  "shape", "angle", "spin", "gravity")
@@ -55,11 +51,9 @@ class Particle:
     def __init__(self, x, y, vx, vy, life, size, color, shape, spin=0.0, gravity=0.0):
         self.x, self.y, self.vx, self.vy = x, y, vx, vy
         self.age, self.life, self.size, self.color = 0.0, life, size, color
-        self.shape = shape                      # "paper" or "star"
+        self.shape = shape                     
         self.angle = random.uniform(0, math.tau)
         self.spin, self.gravity = spin, gravity
-
-
 class Effects:
     """Owns the clock, the particles and the small animation helpers."""
 
@@ -71,21 +65,18 @@ class Effects:
         self._clock_start = time.monotonic()
         self._last_tick = self._clock_start
         self.particles = []
-        self._values = {}              # smooth() state
-        self._entered = {}             # see() state: key -> time entered
+        self._values = {}             
+        self._entered = {}            
         self._seen_this_frame = set()
         self._seen_last_frame = set()
         self._overlay_cache = {}
 
-    # ============================================================ clock
     def tick(self):
         """Call once at the start of every frame."""
         real_now = time.monotonic()
-        self.dt = min(0.1, real_now - self._last_tick)     # never jump after a lag spike
+        self.dt = min(0.1, real_now - self._last_tick)    
         self._last_tick = real_now
         self.now = real_now - self._clock_start
-
-        # forget screens we left, so re-entering them animates again
         for key in list(self._entered):
             if key not in self._seen_this_frame and key not in self._seen_last_frame:
                 del self._entered[key]
@@ -110,8 +101,6 @@ class Effects:
     def wave(self, speed=1.0, phase=0.0):
         """Smooth 0..1..0 loop (breathing / pulsing)."""
         return 0.5 + 0.5 * math.sin(self.now * speed * math.tau + phase)
-
-    # ============================================================ spawning
     def confetti(self, center, count=70, power=420.0, upward=True):
         for _ in range(count):
             if len(self.particles) >= self.MAX_PARTICLES:
@@ -149,14 +138,13 @@ class Effects:
                 color=random.choice(SPARKLE_COLORS), shape="star",
                 spin=random.uniform(-4, 4), gravity=60.0))
 
-    # ============================================================ particles
     def _update_particles(self):
         alive = []
         for p in self.particles:
             p.age += self.dt
             if p.age >= p.life:
                 continue
-            p.vx *= 1.0 - min(1.0, 1.4 * self.dt)          # air drag
+            p.vx *= 1.0 - min(1.0, 1.4 * self.dt)         
             p.vy += p.gravity * self.dt
             p.vy *= 1.0 - min(1.0, 0.6 * self.dt)
             p.x += p.vx * self.dt
@@ -172,7 +160,7 @@ class Effects:
         if clip is not None:
             surface.set_clip(clip)
         for p in self.particles:
-            fade = 1.0 - clamp01((p.age / p.life - 0.7) / 0.3)     # shrink in the last 30%
+            fade = 1.0 - clamp01((p.age / p.life - 0.7) / 0.3)    
             size = p.size * fade
             if size < 1:
                 continue
@@ -184,7 +172,6 @@ class Effects:
 
     @staticmethod
     def _draw_paper(surface, p, size):
-        # a tumbling rectangle: its width shrinks and grows as it "flips"
         flip = abs(math.cos(p.angle * 1.7)) * 0.8 + 0.2
         w, h = size * flip, size * 0.55
         cos_a, sin_a = math.cos(p.angle), math.sin(p.angle)
@@ -196,13 +183,11 @@ class Effects:
     @staticmethod
     def _draw_star(surface, p, size):
         points = []
-        for i in range(8):                                  # 4-point star
+        for i in range(8):                                  
             radius = size if i % 2 == 0 else size * 0.28
             a = p.angle + i * math.pi / 4
             points.append((p.x + math.cos(a) * radius, p.y + math.sin(a) * radius))
         pygame.draw.polygon(surface, p.color, points)
-
-    # ============================================================ ambience
     def _overlay(self, size):
         key = tuple(size)
         surface = self._overlay_cache.get(key)
@@ -218,13 +203,13 @@ class Effects:
         overlay = self._overlay(area.size)
         for i in range(count):
             seed = i * 12.9898
-            speed = 0.03 + 0.04 * ((math.sin(seed) + 1) / 2)          # screens per second
+            speed = 0.03 + 0.04 * ((math.sin(seed) + 1) / 2)         
             progress = (self.now * speed + (i / count)) % 1.0
             x = (0.08 + 0.84 * ((math.sin(seed * 3.1) + 1) / 2)) * area.width
             x += math.sin(self.now * 0.8 + seed) * 18
             y = area.height * (1.05 - progress * 1.15)
             radius = 6 + 14 * ((math.sin(seed * 1.7) + 1) / 2)
-            alpha = int(90 * math.sin(math.pi * progress))              # fade in and out
+            alpha = int(90 * math.sin(math.pi * progress))             
             pygame.draw.circle(overlay, (*color, alpha), (int(x), int(y)), int(radius))
         surface.blit(overlay, area.topleft)
 

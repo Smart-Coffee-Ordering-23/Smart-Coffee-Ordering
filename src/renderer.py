@@ -1,28 +1,21 @@
 """Renderer - all Pygame drawing for the coffee kiosk.
-
 The renderer only DRAWS. It never decides what happens next - main.py
 tells it which screen to show and which data to display.
-
 Design: warm cream background, dark coffee brown text, caramel accent,
 white rounded cards with soft shadows, a modern navbar with the logo,
 a compact step rail, a clean camera panel and toast notifications.
 """
 import math
-
 import cv2
 import pygame
-
 from src import config
 from src.effects import Effects, ease_out_back, ease_out_cubic
-from src.hand_tracker import FACE_DEBUG_LINES   # face mesh lines for the debug overlay
+from src.hand_tracker import FACE_DEBUG_LINES   
 from src.product import format_price
-
 WINDOW_SIZE = (config.WINDOW_WIDTH, config.WINDOW_HEIGHT)
 MAIN_WIDTH = config.MAIN_WIDTH
 PANEL_X = config.WINDOW_WIDTH - config.SIDEBAR_WIDTH
 PREVIEW_SIZE = (260, 195)
-
-# MediaPipe hand skeleton: pairs of landmark numbers joined by a line
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),            # thumb
     (0, 5), (5, 6), (6, 7), (7, 8),            # index
@@ -31,11 +24,8 @@ HAND_CONNECTIONS = [
     (13, 17), (17, 18), (18, 19), (19, 20),    # pinky
     (0, 17),                                   # palm edge
 ]
-# Fingertip landmark number and short label for each finger
 FINGER_TIPS = (("thumb", 4, "Thumb"), ("index", 8, "Index"), ("middle", 12, "Mid"),
                ("ring", 16, "Ring"), ("pinky", 20, "Pinky"))
-
-# Gesture legend in the bottom instruction bar: (gesture, action)
 GESTURE_LEGEND = [
     ("OPEN PALM", "Menu"),
     ("POINT", "Select"),
@@ -45,25 +35,16 @@ GESTURE_LEGEND = [
     ("THUMBS", "OK"),
     ("FIST", "Cancel"),
 ]
-
-
-# ============================================================ small helpers
 def make_font(size, bold=False):
     return pygame.font.SysFont("segoeui,helveticaneue,arial,dejavusans", size, bold=bold)
-
-
 def draw_rounded_rect(surface, color, rect, radius=18, border_color=None, border_width=0):
     pygame.draw.rect(surface, color, rect, border_radius=radius)
     if border_color is not None and border_width > 0:
         pygame.draw.rect(surface, border_color, rect, width=border_width, border_radius=radius)
-
-
 def draw_card(surface, rect, radius=20, border_color=None, border_width=0):
     """A white rounded card with a soft shadow below it."""
     draw_rounded_rect(surface, config.COLORS["shadow"], rect.move(0, 5), radius)
     draw_rounded_rect(surface, config.COLORS["card"], rect, radius, border_color, border_width)
-
-
 def draw_cup(surface, center, size, color):
     """A simple coffee cup made from shapes (placeholder / welcome art)."""
     size = int(size)
@@ -78,8 +59,6 @@ def draw_cup(surface, center, size, color):
     saucer = pygame.Rect(0, 0, int(size * 1.25), size // 9)
     saucer.center = (body.centerx, body.bottom + size // 20)
     pygame.draw.rect(surface, color, saucer, border_radius=size // 18)
-
-
 def make_placeholder(name, size, font):
     """Picture shown when a coffee image file is missing (never a different coffee)."""
     placeholder = pygame.Surface(size, pygame.SRCALPHA)
@@ -89,8 +68,6 @@ def make_placeholder(name, size, font):
     label = font.render(name, True, config.COLORS["accent_dark"])
     placeholder.blit(label, label.get_rect(center=(size[0] // 2, size[1] - 18)))
     return placeholder
-
-
 class Renderer:
     """Draws every screen of the Smart Coffee Ordering app."""
 
@@ -112,8 +89,8 @@ class Renderer:
         self.image_cache = {}
         self.logo_cache = {}
         self.logo_image = self._load_logo()
-        self.hits = []          # clickable areas collected while drawing
-        self.fx = Effects()     # animation clock, confetti, sparkles, bubbles
+        self.hits = []         
+        self.fx = Effects()    
         self._last_selected_id = None
         self._selected_at = -10.0
         self._last_discount = False
@@ -122,8 +99,6 @@ class Renderer:
         self._toast_message = None
         self._toast_at = 0.0
         self._pointer_trail = []
-
-    # ------------------------------------------------------------ base tools
     def text(self, text, font, color, position, align="left"):
         """Draw text. align = 'left', 'center' or 'right' (relative to position)."""
         surface = self.fonts[font].render(str(text), True, config.COLORS[color])
@@ -136,11 +111,9 @@ class Renderer:
             rect.midleft = position
         self.screen.blit(surface, rect)
         return rect
-
     def register(self, rect, action, value=None):
         """Remember a clickable area for this frame (mouse support)."""
         self.hits.append((rect, action, value))
-
     def action_at(self, position):
         """Return (action, value) of the clickable area under position, or None."""
         if position is None:
@@ -149,7 +122,6 @@ class Renderer:
             if rect.collidepoint(position):
                 return action, value
         return None
-
     def button(self, rect, label, action, value=None, primary=True, small=False):
         """A modern rounded button. Registers itself for mouse clicks."""
         if primary:
@@ -163,7 +135,6 @@ class Renderer:
         self.text(label, font, text_color, rect.center, "center")
         self.register(rect, action, value)
         return rect
-
     def _load_logo(self):
         for path in config.LOGO_PATHS:
             if path.exists():
@@ -184,7 +155,6 @@ class Renderer:
                       max(1, int(self.logo_image.get_height() * scale)))
             self.logo_cache[size] = pygame.transform.smoothscale(self.logo_image, scaled)
         return self.logo_cache[size]
-
     def get_product_image(self, product, size):
         """Coffee picture scaled to fit; a placeholder when the file is missing."""
         key = (product.id, size)
@@ -241,8 +211,6 @@ class Renderer:
         """Draw a coffee image centered inside a rounded beige box."""
         image = self.get_cover_image(product, (box_rect.width, box_rect.height), 16)
         self.screen.blit(image, box_rect)
-
-    # ============================================================ chrome
     def draw_background(self):
         """Start every frame: forget old click areas and paint the cream background."""
         self.hits = []
@@ -270,15 +238,12 @@ class Renderer:
         pygame.draw.line(self.screen, config.COLORS["border"],
                          (0, config.NAVBAR_HEIGHT - 1), (width, config.NAVBAR_HEIGHT - 1), 2)
 
-        # LEFT: logo + shop name
         logo = self.get_logo_image((44, 44))
         if logo is not None:
             self.screen.blit(logo, logo.get_rect(center=(40, 36)))
         else:
             draw_cup(self.screen, (40, 32), 34, config.COLORS["accent"])
         self.text(config.SHOP_NAME, "body_bold", "text", (72, 36))
-
-        # CENTER: current section (hidden on the welcome screen)
         if section_label != "Welcome":
             label_surface = self.fonts["small_bold"].render(section_label, True,
                                                             config.COLORS["accent_dark"])
@@ -287,9 +252,8 @@ class Renderer:
             draw_rounded_rect(self.screen, config.COLORS["accent_soft"], pill, 15)
             self.screen.blit(label_surface, label_surface.get_rect(center=pill.center))
 
-        # RIGHT: cart pill + AI pill
         if self._last_cart_count is not None and cart_count != self._last_cart_count:
-            self._cart_bump_at = self.fx.now          # the cart "jumps" when it changes
+            self._cart_bump_at = self.fx.now          
         self._last_cart_count = cart_count
         bump = max(0.0, 1.0 - (self.fx.now - self._cart_bump_at) / 0.45)
         bump = math.sin(bump * math.pi) if bump > 0 else 0.0
@@ -343,28 +307,23 @@ class Renderer:
             self.text(label, "small_bold" if is_current else "tiny_bold", text_color,
                       chip.center, "center")
             self.register(chip, "step", name)
-
-    # ============================================================ screens
     def draw_welcome(self, ai_ready=False):
         """Hero screen: headline + start button on the left, coffee collage on the right."""
         left = 64
         self.fx.ambient(self.screen, pygame.Rect(0, config.CONTENT_TOP - 20, MAIN_WIDTH,
                                                  config.CONTENT_BOTTOM - config.CONTENT_TOP + 20))
-        # soft background shapes behind the collage
         pygame.draw.circle(self.screen, config.COLORS["accent_soft"], (730, 400), 250)
         pygame.draw.circle(self.screen, config.COLORS["beige"], (730, 400), 190)
-
-        # collage: three real coffees in white circles with soft shadows
         by_name = {p.name: p for p in self.menu.products}
         picks = [by_name.get(n) for n in ("Cappuccino", "Iced Latte", "Caramel Macchiato")]
         picks = [p for p in picks if p] or self.menu.products[:3]
         layout = [((730, 410), 300), ((575, 560), 150), ((880, 250), 160)]
-        intro = ease_out_back(self.fx.see("welcome") / 0.7)            # collage pops in
+        intro = ease_out_back(self.fx.see("welcome") / 0.7)            
         for index, (product, (center, size)) in enumerate(zip(picks, layout)):
-            bob = math.sin(self.fx.now * 1.5 + index * 1.7) * 7         # gentle floating
+            bob = math.sin(self.fx.now * 1.5 + index * 1.7) * 7         
             size = int(size * min(1.15, max(0.0, intro - index * 0.04)))
             if size < 40:
-                continue                                             # still too small to draw
+                continue                                             
             center = (center[0], center[1] + bob)
             disc = pygame.Rect(0, 0, size, size)
             disc.center = center
@@ -373,8 +332,6 @@ class Renderer:
             ring = size - 14
             image = self.get_cover_image(product, (ring, ring), ring // 2)
             self.screen.blit(image, image.get_rect(center=disc.center))
-
-        # headline + slogan + start button
         self.text("Order coffee with", "title", "text", (left, 250))
         self.text("a wave of your hand.", "title", "accent", (left, 304))
         self.text("No touching, no queue. Just show your palm,", "body", "muted", (left, 366))
@@ -400,8 +357,8 @@ class Renderer:
     def _card_rects():
         """The 3 x 2 grid of coffee cards inside the main area."""
         margin, gap_x, gap_y, top = 24, 16, 16, 178
-        width = (MAIN_WIDTH - 2 * margin - 2 * gap_x) // 3        # 300
-        height = (config.CONTENT_BOTTOM - 8 - top - gap_y) // 2   # 223
+        width = (MAIN_WIDTH - 2 * margin - 2 * gap_x) // 3       
+        height = (config.CONTENT_BOTTOM - 8 - top - gap_y) // 2   
         rects = []
         for index in range(config.ITEMS_PER_PAGE):
             row, column = divmod(index, 3)
@@ -421,8 +378,6 @@ class Renderer:
             return
 
         self.text("Choose your coffee", "heading", "text", (24, 150))
-
-        # page controls (right side of the heading row)
         next_rect = pygame.Rect(MAIN_WIDTH - 24 - 36, 132, 36, 36)
         prev_rect = pygame.Rect(next_rect.left - 44, 132, 36, 36)
         page_label = f"Page {self.menu.page + 1} / {self.menu.page_count}"
@@ -440,10 +395,10 @@ class Renderer:
             is_selected = selected_id is not None and selected_id == product.id
             is_hovered = hovered_product is not None and hovered_product.id == product.id
             if is_selected and selection_changed and since_enter > 0.5:
-                self.fx.sparkle(rect.move(0, 70).midtop, 16)       # little stars on selection
+                self.fx.sparkle(rect.move(0, 70).midtop, 16)      
             pop = ease_out_back((since_enter - index * 0.07) / 0.45)
             if since_enter < index * 0.07:
-                self.register(rect, "card", product)               # not visible yet, still clickable
+                self.register(rect, "card", product)               
                 continue
             self._draw_product_card(rect, product, is_hovered, is_selected,
                                     slide=int((1.0 - pop) * 42))
@@ -580,7 +535,7 @@ class Renderer:
         draw_card(self.screen, card, 24)
 
         happy = cart.discount_applied
-        if happy and not self._last_discount:                        # the moment of the smile!
+        if happy and not self._last_discount:                       
             self.fx.confetti((card.x + 230, card.y + 120), 60, 520.0)
             self.fx.sparkle((card.x + 230, card.y + 180), 18, 240.0)
         self._last_discount = happy
@@ -596,10 +551,10 @@ class Renderer:
                            face_center, radius)
         pygame.draw.circle(self.screen, config.COLORS["good"] if happy else config.COLORS["accent"],
                            face_center, radius, 5)
-        blinking = (self.fx.now % 3.2) < 0.12 and not happy            # an idle blink
+        blinking = (self.fx.now % 3.2) < 0.12 and not happy            
         for eye_x in (-34, 34):
             eye = (face_center[0] + eye_x, face_center[1] - 26)
-            if happy:                                                  # happy ^ ^ eyes
+            if happy:                                                  
                 pygame.draw.arc(self.screen, config.COLORS["text"],
                                 pygame.Rect(eye[0] - 12, eye[1] - 10, 24, 22),
                                 math.pi * 0.1, math.pi * 0.9, 5)
@@ -608,7 +563,7 @@ class Renderer:
                                  (eye[0] - 9, eye[1]), (eye[0] + 9, eye[1]), 4)
             else:
                 pygame.draw.circle(self.screen, config.COLORS["text"], eye, 9)
-        if happy:                                                      # big open smile
+        if happy:                                                      
             mouth = pygame.Rect(0, 0, 90, 56)
             mouth.center = (face_center[0], face_center[1] + 22)
             pygame.draw.ellipse(self.screen, config.COLORS["text"], mouth)
@@ -666,8 +621,6 @@ class Renderer:
         draw_card(self.screen, card, 24)
         center_x = card.centerx
         self.text("Order Summary", "title", "text", (center_x, card.y + 66), "center")
-
-        # order number + kitchen status pills
         number_label = order_number or "#---"
         number_surface = self.fonts["body_bold"].render(number_label, True,
                                                         config.COLORS["accent_dark"])
@@ -699,18 +652,18 @@ class Renderer:
         card = self._content_card()
         draw_card(self.screen, card, 24)
         since = self.fx.see("complete")
-        if since < 0.05 and not self.fx.particles:                      # celebration!
+        if since < 0.05 and not self.fx.particles:                     
             self.fx.confetti((card.x + 60, card.bottom - 40), 60, 700.0)
             self.fx.confetti((card.right - 60, card.bottom - 40), 60, 700.0)
         if since < 2.5:
             self.fx.confetti_rain(pygame.Rect(card.x, card.y, card.width, 10), 2)
         center = (card.centerx, card.y + 140)
-        grow = ease_out_back(since / 0.55)                              # badge pops in
+        grow = ease_out_back(since / 0.55)                              
         radius = max(1, int(72 * grow))
         pygame.draw.circle(self.screen, config.COLORS["good_soft"], center,
                            radius + int(10 + 8 * self.fx.wave(0.7)))
         pygame.draw.circle(self.screen, config.COLORS["good"], center, radius)
-        tick = ease_out_cubic((since - 0.25) / 0.4)                     # the tick draws itself
+        tick = ease_out_cubic((since - 0.25) / 0.4)                     
         a, b, c = (center[0] - 32, center[1] + 2), (center[0] - 8, center[1] + 28), \
                   (center[0] + 36, center[1] - 26)
         if tick > 0:
@@ -732,13 +685,11 @@ class Renderer:
                   (card.centerx, card.y + 392), "center")
         y = card.bottom - 72
         self.button(pygame.Rect(card.centerx - 110, y, 220, 48), "New order", "new_order")
-
-    # ============================================================ feedback
     def draw_toast(self, message):
         """Small modern notification at the top of the content area."""
         if not message:
             return
-        if message != self._toast_message:                       # new message -> drop in
+        if message != self._toast_message:                      
             self._toast_message = message
             self._toast_at = self.fx.now
         drop = ease_out_back((self.fx.now - self._toast_at) / 0.35)
@@ -770,8 +721,6 @@ class Renderer:
             self.text(gesture, "tiny_bold", "accent_dark", (chip.centerx, chip.y + 12), "center")
             self.text(action, "tiny", "text", (chip.centerx, chip.y + 27), "center")
             x += chip_width + gap
-
-    # ============================================================ sidebar
     def draw_sidebar(self, frame, landmarks, debug_rows, hold_progress,
                      ai_ready, hand_detected, status_message, finger_states=None,
                      face_state=None, face_points=None):
@@ -781,8 +730,6 @@ class Renderer:
         pygame.draw.rect(self.screen, config.COLORS["panel"], panel)
         left = panel.x + 20
         right = panel.right - 20
-
-        # header: AI CAMERA + ready / standby
         self.text("AI CAMERA", "small_bold", "panel_text", (left, panel.y + 30))
         status_word = "Ready" if ai_ready else "Standby"
         self.text(status_word, "tiny_bold", "good" if ai_ready else "panel_muted",
@@ -794,8 +741,6 @@ class Renderer:
         preview_rect = pygame.Rect(left, panel.y + 52, *PREVIEW_SIZE)
         self._draw_camera_preview(frame, landmarks, preview_rect, finger_states,
                                   face_points)
-
-        # friendly status line with a colored dot
         dot_color = (config.COLORS["good"] if hand_detected else
                      config.COLORS["muted"] if ai_ready else config.COLORS["bad"])
         pygame.draw.circle(self.screen, dot_color, (left + 7, preview_rect.bottom + 28), 6)
@@ -806,11 +751,7 @@ class Renderer:
             count = sum(finger_states.values())
             self.text(f"{count}/5 fingers", "tiny_bold", "good",
                       (right, preview_rect.bottom + 28), "right")
-
-        # one chip per finger: green = this finger is recognized as straight
         self._draw_finger_chips(finger_states, left, right, preview_rect.bottom + 46)
-
-        # hold-gesture progress bar
         self.text("Hold gesture", "tiny", "panel_muted", (left, preview_rect.bottom + 90))
         bar = pygame.Rect(left, preview_rect.bottom + 108, right - left, 10)
         draw_rounded_rect(self.screen, config.COLORS["panel_alt"], bar, 5)
@@ -818,11 +759,7 @@ class Renderer:
             draw_rounded_rect(self.screen, config.COLORS["accent"],
                               pygame.Rect(bar.x, bar.y, int(bar.width * hold_progress),
                                           bar.height), 5)
-
-        # face gestures: smile -> discount, eyes closed -> back one step
         self._draw_face_chips(face_state, left, right, preview_rect.bottom + 132)
-
-        # technical rows only when DEBUG_MODE is on
         if config.DEBUG_MODE:
             y = preview_rect.bottom + 190
             for label, value, is_good in debug_rows:
@@ -830,16 +767,14 @@ class Renderer:
                 value_color = config.COLORS["good"] if is_good else config.COLORS["panel_muted"]
                 surface = self.fonts["tiny_bold"].render(str(value), True, value_color)
                 self.screen.blit(surface, surface.get_rect(midright=(right, y)))
-                y += 20   # compact spacing so the whole debug HUD fits the panel
+                y += 20  
         else:
             y = preview_rect.bottom + 190
             self.text("Gesture AI is active.", "tiny", "panel_muted", (left, y))
             self.text("Raise your open palm to start.", "tiny", "panel_muted", (left, y + 22))
             if not config.GESTURE_ONLY:
                 self.text("Or use the keyboard.", "tiny", "panel_muted", (left, y + 44))
-
-        # keyboard help (bottom of the panel)
-        if config.GESTURE_ONLY or config.DEBUG_MODE:    # debug rows need the room
+        if config.GESTURE_ONLY or config.DEBUG_MODE:   
             return
         self.text("KEYBOARD", "tiny_bold", "panel_muted", (left, panel.bottom - 96))
         self.text("F1-F8 screens   F11 fullscreen", "tiny", "panel_muted",
@@ -912,8 +847,6 @@ class Renderer:
             self.text("No camera image", "tiny", "panel_muted", rect.center, "center")
             return
         picture = pygame.image.frombuffer(rgb_frame.tobytes(), PREVIEW_SIZE, "RGB")
-
-        # clip to rounded corners
         self.screen.set_clip(rect.inflate(-4, -4).move(0, 0))
         self.screen.blit(picture, rect)
         if face_points and config.DEBUG_MODE:
@@ -921,7 +854,7 @@ class Renderer:
         if landmarks:
             self._draw_hand_overlay(landmarks, rect, finger_states)
         if landmarks and config.DEBUG_MODE:
-            for x, y in landmarks:          # 21 hand points - developers only
+            for x, y in landmarks:          
                 pygame.draw.circle(self.screen, config.COLORS["accent"],
                                    (rect.x + int(x * rect.width),
                                     rect.y + int(y * rect.height)), 3)
@@ -939,14 +872,12 @@ class Renderer:
                 pygame.draw.line(self.screen, config.COLORS["panel_muted"],
                                  to_screen(face_points[start]),
                                  to_screen(face_points[end]), 1)
-
-    # ============================================================ pointer
     def draw_pointer(self, position, progress):
         """A circle that follows the finger. The ring fills while you hold POINTING."""
         x, y = int(position[0]), int(position[1])
         self._pointer_trail.append((x, y))
         self._pointer_trail = self._pointer_trail[-9:]
-        for i, (tx, ty) in enumerate(self._pointer_trail[:-1]):      # fading comet tail
+        for i, (tx, ty) in enumerate(self._pointer_trail[:-1]):     
             pygame.draw.circle(self.screen, config.COLORS["accent"], (tx, ty),
                                max(2, int(2 + 9 * i / len(self._pointer_trail))))
         pygame.draw.circle(self.screen, config.COLORS["white"], (x, y), 16)

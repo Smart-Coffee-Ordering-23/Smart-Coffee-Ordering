@@ -1,26 +1,20 @@
 """KitchenQueue - a very simple kitchen order queue.
-
     Order confirmed -> Kitchen Queue -> Preparing -> Completed
-
 The queue also updates the order status inside the database through the
 OrderManager, so the UI can show:  Order #001  Status: Preparing
 """
 import time
-
 from src import config
 from src.order_manager import STATUS_COMPLETED, STATUS_PREPARING
-
-
 class KitchenQueue:
     """Keeps track of confirmed orders that the kitchen is working on."""
-
     def __init__(self, order_manager=None, prepare_seconds=None, clock=None):
         self.order_manager = order_manager
         self.prepare_seconds = (config.KITCHEN_PREPARE_SECONDS
                                 if prepare_seconds is None else prepare_seconds)
         self._clock = clock or time.time
-        self._entries = {}          # order_id -> {"status": str, "started_at": float}
-        self._completed_events = [] # order ids that just became Completed
+        self._entries = {}          
+        self._completed_events = [] 
 
     def enqueue(self, order_id):
         """A new confirmed order starts Preparing."""
