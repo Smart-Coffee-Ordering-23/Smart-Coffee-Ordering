@@ -203,7 +203,7 @@ python tools/smoke_run.py 40
 | `Could not find a usable camera` | Close other apps using the webcam; the app keeps working with keyboard/mouse |
 | Hand not detected | Improve lighting, use a plain background, keep the whole hand inside the preview |
 | Gestures fire too early/late | Tune `GESTURE_HOLD_SECONDS` and `GESTURE_COOLDOWN` in `src/config.py` |
-| Smile never triggers | Set `DEBUG_MODE = True` in `src/config.py`, watch the *Smile ratio*, adjust `SMILE_RATIO_THRESHOLD` |
+| Smile never triggers | Set `DEBUG_MODE = True` in `src/config.py`, watch the *Smile w/thr* row, adjust `SMILE_WIDTH_THRESHOLD` / `SMILE_WIDTH_MARGIN` / `SMILE_LIFT_DROP_RATIO` |
 | No sound | Press `M` (must be on), check `SOUND_ENABLED` and `SOUND_VOLUME` in `src/config.py` and the WAV files in `assets/sounds/` - missing sounds never crash the app |
 | Menu empty | Look at the console message and validate `data/menu.json` (JSON syntax) |
 | MediaPipe install error | Use Python 3.11/3.12 and `python -m pip install -r requirements.txt` |

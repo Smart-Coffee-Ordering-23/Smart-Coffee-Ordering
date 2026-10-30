@@ -14,6 +14,7 @@ import pygame
 
 from src import config
 from src.effects import Effects, ease_out_back, ease_out_cubic
+from src.hand_tracker import FACE_DEBUG_LINES   # face mesh lines for the debug overlay
 from src.product import format_price
 
 WINDOW_SIZE = (config.WINDOW_WIDTH, config.WINDOW_HEIGHT)
@@ -773,7 +774,7 @@ class Renderer:
     # ============================================================ sidebar
     def draw_sidebar(self, frame, landmarks, debug_rows, hold_progress,
                      ai_ready, hand_detected, status_message, finger_states=None,
-                     face_state=None):
+                     face_state=None, face_points=None):
         """Compact AI camera panel on the right (technical detail only in debug mode)."""
         panel = pygame.Rect(PANEL_X, config.NAVBAR_HEIGHT, config.SIDEBAR_WIDTH,
                             config.WINDOW_HEIGHT - config.NAVBAR_HEIGHT)
@@ -791,7 +792,8 @@ class Renderer:
                                (right - 58, panel.y + 25), 5)
 
         preview_rect = pygame.Rect(left, panel.y + 52, *PREVIEW_SIZE)
-        self._draw_camera_preview(frame, landmarks, preview_rect, finger_states)
+        self._draw_camera_preview(frame, landmarks, preview_rect, finger_states,
+                                  face_points)
 
         # friendly status line with a colored dot
         dot_color = (config.COLORS["good"] if hand_detected else
@@ -828,7 +830,7 @@ class Renderer:
                 value_color = config.COLORS["good"] if is_good else config.COLORS["panel_muted"]
                 surface = self.fonts["tiny_bold"].render(str(value), True, value_color)
                 self.screen.blit(surface, surface.get_rect(midright=(right, y)))
-                y += 24
+                y += 20   # compact spacing so the whole debug HUD fits the panel
         else:
             y = preview_rect.bottom + 190
             self.text("Gesture AI is active.", "tiny", "panel_muted", (left, y))
@@ -896,8 +898,9 @@ class Renderer:
                                else config.COLORS["panel_muted"], center, 6)
             pygame.draw.circle(self.screen, config.COLORS["white"], center, 6, 1)
 
-    def _draw_camera_preview(self, frame, landmarks, rect, finger_states=None):
-        """Live camera image with rounded corners, hand skeleton and fingertip dots."""
+    def _draw_camera_preview(self, frame, landmarks, rect, finger_states=None,
+                             face_points=None):
+        """Live camera image with rounded corners, hand skeleton and face mesh."""
         draw_rounded_rect(self.screen, (25, 18, 14), rect, 14)
         if frame is None:
             self.text("No camera image", "tiny", "panel_muted", rect.center, "center")
@@ -913,6 +916,8 @@ class Renderer:
         # clip to rounded corners
         self.screen.set_clip(rect.inflate(-4, -4).move(0, 0))
         self.screen.blit(picture, rect)
+        if face_points and config.DEBUG_MODE:
+            self._draw_face_overlay(face_points, rect)
         if landmarks:
             self._draw_hand_overlay(landmarks, rect, finger_states)
         if landmarks and config.DEBUG_MODE:
@@ -922,6 +927,18 @@ class Renderer:
                                     rect.y + int(y * rect.height)), 3)
         self.screen.set_clip(None)
         pygame.draw.rect(self.screen, config.COLORS["panel_alt"], rect, width=2, border_radius=14)
+
+    def _draw_face_overlay(self, face_points, rect):
+        """DEBUG ONLY: face oval + eyes + lips from the MediaPipe face mesh."""
+        def to_screen(point):
+            return (rect.x + int(point[0] * rect.width), rect.y + int(point[1] * rect.height))
+
+        count = len(face_points)
+        for start, end in FACE_DEBUG_LINES:
+            if start < count and end < count:
+                pygame.draw.line(self.screen, config.COLORS["panel_muted"],
+                                 to_screen(face_points[start]),
+                                 to_screen(face_points[end]), 1)
 
     # ============================================================ pointer
     def draw_pointer(self, position, progress):

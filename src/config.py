@@ -96,21 +96,77 @@ GESTURE_HOLD_SECONDS = {
 GESTURE_REPEAT_SECONDS = {"TWO_FINGERS": 1.2}   # keep firing while held
 GESTURE_COOLDOWN = 0.7       # minimum seconds between any two gesture events
 
+# Stability of the hand-pose vote (consecutive-frame validation).
+# Example: with 10 frames and 0.8, a pose must be seen in 8 of the last
+# 10 frames before it is accepted.
+GESTURE_VOTE_FRAMES = 10     # last N frames voted on (majority decides)
+GESTURE_MIN_CONFIDENCE = 0.8 # the winning pose needs at least this vote share
+HAND_LOST_RESET_FRAMES = 3   # empty frames before all hand state is reset
+HAND_MIN_DETECTION_CONFIDENCE = 0.6    # MediaPipe hand detector threshold
+HAND_MIN_TRACKING_CONFIDENCE = 0.5     # MediaPipe hand tracker threshold
+HAND_MIN_SCORE = 0.5         # ignore hands MediaPipe labels with low confidence
+HAND_MAX_NUM_HANDS = 2       # detect up to 2, then keep the clearest one
+
+# Hand quality gates (normalized coordinates): reject incomplete detections
+# before they can confuse the classifier.
+HAND_MIN_PALM_SIZE = 0.08    # wrist->middle-knuckle distance; smaller = too far/cut off
+HAND_LANDMARK_MARGIN = 0.15  # landmarks may leave the frame by at most this much
+
+# Finger state: per-finger score = FINGER_STRAIGHT_WEIGHT * PIP straightness
+# (angle at the PIP joint, rotation/scale invariant) + weight * reach
+# (tip beyond pip relative to palm size). Positive = extended, < 0 = curled.
+# Hysteresis: >= FINGER_SCORE_ON flips the finger UP, <= FINGER_SCORE_OFF flips
+# it DOWN, anything in between KEEPS the previous state (no flicker).
+FINGER_SCORE_ON = 0.45       # score to accept a finger as extended
+FINGER_SCORE_OFF = 0.25      # score to accept a finger as folded
+FINGER_STRAIGHT_WEIGHT = 0.5 # balance between straightness and reach cues
+FINGER_REACH_FULL = 0.5      # reach that counts as "fully extended" for scaling
+THUMB_UP_OVER_KNUCKLE = 0.30 # thumb tip must rise this many palm sizes along
+                             # the hand's own axis beyond the index knuckle
+
 SWIPE_DISTANCE = 0.25        # hand must move this far (0-1 = fraction of frame width)
 SWIPE_TIME = 0.6             # ...within this many seconds
 SWIPE_COOLDOWN = 1.0         # seconds to wait before another swipe is accepted
+SWIPE_MIN_SPEED = 0.45       # frame widths per second - rejects slow drifts
+SWIPE_MAX_VERTICAL_RATIO = 0.7   # vertical move must stay below 70% of horizontal
+SWIPE_MIN_FRAMES = 4         # samples needed before a swipe can be judged
+SWIPE_MIN_PATH_RATIO = 0.7   # net path / traveled path - rejects jittery motion
 
-# Face gestures (smile = discount, deliberate blink = back)
-SMILE_RATIO_THRESHOLD = 0.45  # mouth width / face width; above this = smiling
-SMILE_HOLD_SECONDS = 0.5
+# ------------------------------------------------------------- face gestures
+# SMILE = 10% discount. A genuine smile needs TWO independent measurements:
+#   1) mouth width / face width        (corners pulled outward)
+#   2) nose-tip -> corner-mid vertical (corners raised toward the nose)
+# Both are compared against this person's own neutral baseline once it is
+# learned, so wide-mouthed or narrow-face users work too.
+SMILE_WIDTH_THRESHOLD = 0.45     # absolute floor: mouth width / face width
+SMILE_WIDTH_MARGIN = 0.03        # must beat personal neutral width by this much
+SMILE_LIFT_DROP_RATIO = 0.25     # corner gap must shrink by 25% vs neutral
+SMILE_HOLD_SECONDS = 0.5         # seconds the smile must be held
+SMILE_STABLE_FRAMES = 4          # consecutive smiling frames required
+SMILE_BASELINE_FRAMES = 150      # ~5 s of frames used to learn the neutral mouth
+SMILE_BASELINE_WARMUP = 20       # frames before the personal baseline is trusted
+SMILE_BASELINE_PERCENTILE = 25   # low percentile of widths = neutral mouth
+                                # (the matching high percentile of lift = neutral lift)
+
+# BLINK = Back. A blink is a complete cycle: OPEN -> CLOSED -> OPEN.
+# Closures shorter than MIN are noise; longer than MAX count as "eyes kept
+# closed" and are ignored on purpose. A face must be seen open first.
+BLINK_MIN_SECONDS = 0.10     # shortest closure that counts as a deliberate blink
+BLINK_MAX_SECONDS = 0.70     # longer than this = keeping eyes closed, not blinking
+BLINK_COOLDOWN = 1.5         # seconds between two accepted blinks
 EYE_CLOSED_THRESHOLD = 0.22   # fallback (first second only): below this = eyes closed
 EYE_CLOSED_RELATIVE = 0.75    # eyes count as closed below 75% of YOUR normal open-eye value
 EYE_BASELINE_FRAMES = 90      # ~3 seconds of recent frames used to learn your open-eye value
 EYE_BASELINE_WARMUP = 15      # frames needed before the personal baseline is trusted
 EYE_SMOOTH_FRAMES = 3         # average the last few frames so camera noise does not hide a closed eye
 FACE_LOST_GRACE_SECONDS = 0.6 # MediaPipe often loses the face when the eyes shut - keep counting
-BLINK_HOLD_SECONDS = 0.5      # a quick normal blink is ignored on purpose
-BLINK_COOLDOWN = 1.5
+
+# ------------------------------------------------------------- camera
+CAMERA_WIDTH = 640
+CAMERA_HEIGHT = 480
+CAMERA_BUFFER_FRAMES = 1      # keep the freshest frame only (low latency)
+CAMERA_FRAME_STALE_SECONDS = 1.0   # older frame = treated as "camera lost"
+CAMERA_RECONNECT_SECONDS = 3.0     # retry interval after a camera dropout
 
 # ================================================================= screens
 WELCOME = "WELCOME"

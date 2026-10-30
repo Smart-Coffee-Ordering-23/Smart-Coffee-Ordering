@@ -10,6 +10,7 @@ Keyboard and mouse always work, even when no camera is available.
 """
 import time
 
+import cv2
 import pygame
 
 from src import config
@@ -123,6 +124,10 @@ class CoffeeApp:
             self.audio.update()          # scheduled sounds (ticket + brewing) and music ducking
             if config.SOUND_MUSIC_ENABLED:
                 self.audio.set_music_scene(MUSIC_SCENE.get(self.controller.screen, "menu"))
+            if (self.controller.screen == config.WELCOME
+                    and self._last_screen is not None
+                    and self._last_screen != config.WELCOME):
+                self.engine.reset_face_state()   # new customer = clean smile/blink state
             self.draw()
             self.clock.tick(config.FPS)
 
@@ -189,9 +194,13 @@ class CoffeeApp:
         if self.frame is None:
             self.hand_landmarks = None
             self.face_info = None
+          
+            events.extend(self.engine.update(None, None))
             return events
-        self.hand_landmarks = self.hand_tracker.find_hand(self.frame)
-        self.face_info = self.face_tracker.detect(self.frame)
+      
+        rgb_frame = cv2.cvtColor(self.frame, cv2.COLOR_BGR2RGB)
+        self.hand_landmarks = self.hand_tracker.find_hand(rgb_frame)
+        self.face_info = self.face_tracker.detect(rgb_frame)
         events.extend(self.engine.update(self.hand_landmarks, self.face_info))
         return events
 
@@ -204,7 +213,7 @@ class CoffeeApp:
             if self.pointer is None or not self.pointer_from_hand:
                 self.pointer = target
             else:
-                # Smooth the movement so the pointer does not jump around.
+                
                 self.pointer = (self.pointer[0] * 0.65 + target[0] * 0.35,
                                 self.pointer[1] * 0.65 + target[1] * 0.35)
             self.pointer_from_hand = True
@@ -222,7 +231,7 @@ class CoffeeApp:
             self.controller.hovered_product = None
         hover_id = hit[1].id if (hit is not None and hit[0] == "card") else None
         if hover_id is not None and hover_id != self._last_hover_id:
-            self.audio.play("hover")                    # soft tick when the pointer moves onto a card
+            self.audio.play("hover")                   
         self._last_hover_id = hover_id
         if hit is not None and hit[0] == "step":
             self.controller.hovered_step = hit[1]
@@ -268,11 +277,12 @@ class CoffeeApp:
                             self.kitchen.get_status(ctrl.order_id), seconds_left)
 
         r.draw_instruction_bar()
+        face_points = self.face_tracker.last_points if config.DEBUG_MODE else None
         r.draw_sidebar(self.frame, self.hand_landmarks, self.build_debug_rows(),
                        self.engine.progress, ai_ready,
                        self.hand_landmarks is not None, self.camera_status_message(),
-                       GestureEngine.finger_states(self.hand_landmarks),
-                       self.face_display_state())
+                       self.engine.current_finger_states(self.hand_landmarks),
+                       self.face_display_state(), face_points)
         r.draw_toast(ctrl.active_message)
         r.draw_effects()                      # confetti / sparkles above everything
 
@@ -322,45 +332,105 @@ class CoffeeApp:
                 "smile_progress": self.engine.smile_progress,
                 "blink_progress": self.engine.blink_progress}
 
+    
+
     def build_debug_rows(self):
         """Technical rows for the camera panel - only drawn in DEBUG_MODE."""
         face = self.face_info
         face_found = face is not None and face.face_found
         hand_found = self.hand_landmarks is not None
         camera_ok = self.camera.is_connected
-        gesture = self.engine.stable_gesture
+        engine = self.engine
+        gesture = engine.stable_gesture
 
-        smiling = (
-            face.is_smiling
-            if face is not None and face.face_found
-            else False
+        if hand_found:
+            hand_text = (
+                f"{self.hand_tracker.last_handedness} "
+                f"{self.hand_tracker.last_confidence:.2f} "
+                f"palm {self.hand_tracker.last_palm_size:.2f}"
+            )
+        else:
+            hand_text = "no"
+
+        if gesture != "NONE":
+            pose_text = (
+                f"{gesture.replace('_', ' ')} "
+                f"{engine.vote_line} str{engine.stability_streak}"
+            )
+        else:
+            pose_text = (
+                f"none ({engine.pose_note})"
+                if engine.pose_note else "none"
+            )
+
+        why_text = engine.rejection_reason or "accepted"
+        last = (
+            engine.last_event.replace("_", " ").title()
+            if engine.last_event != "NONE" else "-"
         )
-        smile_ratio = (
-            f"{face.smile_ratio:.2f}"
-            if face is not None and face.face_found
-            else "-"
+        event_text = f"{last}   cd {engine.cooldown_remaining:.1f}s"
+
+        swipe = engine.swipe_debug
+        arrows = {
+            "left": "<-",
+            "right": "->",
+            "up": "^",
+            "down": "v",
+            "-": "-"
+        }
+
+        swipe_text = (
+            f"{arrows.get(swipe['direction'], '-')} "
+            f"{swipe['speed']:.2f} w/s   {swipe['state']}"
         )
-        eye_ratio = (
-            f"{face.eye_ratio:.2f}"
-            if face is not None and face.face_found
-            else "-"
-        )
+
+        smile_text = "-"
+        eye_text = "-"
+        blink_text = "-"
+        smile_active = False
+        eyes_open = False
+
+        if face is not None and face.face_found:
+            smile_text = (
+                f"{face.smile_ratio:.2f}/{face.smile_threshold:.2f} "
+                f"lift {face.smile_lift:.2f} -> "
+                f"{'YES' if face.is_smiling else 'no'}"
+            )
+
+            eye_text = (
+                f"{face.eye_ratio:.2f} -> "
+                f"{'CLOSED' if face.is_eyes_closed else 'OPEN'}"
+            )
+
+            smile_active = face.is_smiling
+            eyes_open = not face.is_eyes_closed
+
+            if engine.eyes_closed_at is not None:
+                held = engine.blink_progress * config.BLINK_MAX_SECONDS
+                blink_text = (
+                    f"closing {held:.2f}s  "
+                    f"[{config.BLINK_MIN_SECONDS:.2f}-"
+                    f"{config.BLINK_MAX_SECONDS:.2f}s]"
+                )
+            else:
+                blink_text = (
+                    f"waiting  [{config.BLINK_MIN_SECONDS:.2f}-"
+                    f"{config.BLINK_MAX_SECONDS:.2f}s]"
+                )
 
         return [
-            ("Camera", "Connected" if camera_ok else "Not found", camera_ok),
-            ("Hand", "Detected" if hand_found else "Not detected", hand_found),
-            (
-                "Landmarks",
-                len(self.hand_landmarks) if self.hand_landmarks is not None else 0,
-                hand_found,
-            ),
-            ("Gesture", gesture.replace("_", " ").title(), gesture != "NONE"),
-            ("Face", "Detected" if face_found else "Not detected", face_found),
-            ("Smiling", "Yes" if smiling else "No", smiling),
-            ("Smile ratio", smile_ratio, face_found),
-            ("Eye ratio", eye_ratio, face_found),
+            ("Camera", f"{self.camera.width}x{self.camera.height}  "
+             f"{self.clock.get_fps():.0f} fps", camera_ok),
+            ("Hand", hand_text, hand_found),
+            ("Pose", pose_text, gesture != "NONE"),
+            ("Why", why_text, not engine.rejection_reason),
+            ("Last event", event_text, engine.last_event != "NONE"),
+            ("Swipe", swipe_text, swipe["state"] == "fired"),
+            ("Face", "detected" if face_found else "no", face_found),
+            ("Smile w/thr", smile_text, smile_active),
+            ("Eyes (EAR)", eye_text, eyes_open),
+            ("Blink", blink_text, face_found),
         ]
-
 
 def main():
     app = CoffeeApp()
