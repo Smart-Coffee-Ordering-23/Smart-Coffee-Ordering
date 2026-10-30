@@ -1,26 +1,21 @@
 """Product model - one coffee on the menu.
-
 This file only holds data. It has no drawing code and no database code,
 so it can be reused by the menu, the cart and the tests.
 """
 from dataclasses import dataclass
-
 CURRENCY_SYMBOL = "$"
-
-
 @dataclass
 class Product:
     """A single coffee that can be ordered."""
     id: int
     name: str
     price: float
-    image: str = ""            # file name inside assets/products/
-    description: str = ""      # short one-line description (optional)
+    image: str = ""           
+    description: str = ""     
 
     @classmethod
     def from_dict(cls, data):
         """Build a Product from one dictionary of data/menu.json.
-
         Raises ValueError with a friendly message when required fields
         are missing or wrong, so a broken menu.json is easy to find.
         """
@@ -57,8 +52,6 @@ class Product:
             "image": self.image,
             "description": self.description,
         }
-
-
 def format_price(amount):
     """Turn 2.5 into '$2.50'."""
     return f"{CURRENCY_SYMBOL}{float(amount):.2f}"

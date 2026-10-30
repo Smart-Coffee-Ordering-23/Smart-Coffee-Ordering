@@ -10,8 +10,6 @@ from src.product import Product
 
 MAX_QUANTITY = config.MAX_QUANTITY
 DISCOUNT_PERCENT = config.DISCOUNT_PERCENT
-
-
 @dataclass
 class CartItem:
     """One line of the cart, for example: Latte x 2."""
@@ -22,8 +20,6 @@ class CartItem:
 
     def line_total(self):
         return round(self.unit_price * self.quantity, 2)
-
-
 class Cart:
     """The customer's shopping cart."""
 
@@ -31,7 +27,6 @@ class Cart:
         self.items = []
         self.discount_applied = False
 
-    # ------------------------------------------------- adding / removing
     def add_product(self, product, quantity=1):
         """Add a Product (or increase an existing line). Raises ValueError for bad input."""
         self._check_quantity(quantity)
@@ -81,7 +76,6 @@ class Cart:
         self.items = []
         self.discount_applied = False
 
-    # ------------------------------------------------- prices
     def subtotal(self):
         return round(sum(item.line_total() for item in self.items), 2)
 
@@ -99,7 +93,6 @@ class Cart:
     def is_empty(self):
         return len(self.items) == 0
 
-    # ------------------------------------------------- discount
     def apply_discount(self):
         """Apply the smile discount (10%). Only once per order.
         Returns False when it cannot be applied."""
@@ -108,7 +101,6 @@ class Cart:
         self.discount_applied = True
         return True
 
-    # ------------------------------------------------- helpers
     def get_item(self, name):
         return self._find_item_by_name(name)
 

@@ -1,15 +1,11 @@
 """Smart Coffee Ordering - application entry point.
-
 Run from the project folder:      python main.py
-
 Flow:
     Camera -> Hand/Face Tracking -> Gesture Engine -> Interaction Controller
         -> Menu -> Cart -> Order Manager -> Kitchen Queue -> Done
-
 Keyboard and mouse always work, even when no camera is available.
 """
 import time
-
 import cv2
 import pygame
 
@@ -49,13 +45,12 @@ KEY_TO_SCREEN = {
 }
 SECTION_LABELS = dict(config.STEP_LABELS)
 MUSIC_SCENE = {config.WELCOME: "welcome", config.SUMMARY: "party", config.COMPLETE: "party"}
-FADE_SECONDS = 0.30          # screen-to-screen cross-fade
+FADE_SECONDS = 0.30         
 
 
 def clamp(value, low=0.0, high=1.0):
     """Keep a number inside the range [low, high] (used for the pointer)."""
     return max(low, min(high, value))
-
 
 class CoffeeApp:
     """Connects camera, AI, gestures, menu, cart, orders and the UI."""
@@ -71,14 +66,12 @@ class CoffeeApp:
         self.clock = pygame.time.Clock()
         self.running = True
 
-        # Sound first: the music starts the moment the app opens, before the
-        # (slower) camera and AI models finish loading.
         self.audio = AudioManager()
         if config.SOUND_AMBIENCE_ENABLED:
-            self.audio.start_ambience()   # optional cafe background noise
+            self.audio.start_ambience()   
         if config.SOUND_MUSIC_ENABLED:
             self.audio.start_music("welcome")
-        self.audio.play("welcome")        # opening jingle
+        self.audio.play("welcome")       
 
         self.menu = MenuManager()
         self.cart = Cart()
@@ -98,7 +91,7 @@ class CoffeeApp:
         self.face_info = None
         self.pointer = None
         self.pointer_from_hand = False
-        self._last_screen = None            # for the screen cross-fade
+        self._last_screen = None           
         self._previous_frame = None
         self._fade_started = -10.0
         self._fade_from = None
@@ -117,17 +110,17 @@ class CoffeeApp:
             for event in events:
                 handled = self.controller.handle_event(event)
                 if handled is False:
-                    self.engine.rearm()      # allow the gesture to try again
+                    self.engine.rearm()     
             self.kitchen.update()
             self.handle_kitchen_events()
             self.controller.update()
-            self.audio.update()          # scheduled sounds (ticket + brewing) and music ducking
+            self.audio.update()         
             if config.SOUND_MUSIC_ENABLED:
                 self.audio.set_music_scene(MUSIC_SCENE.get(self.controller.screen, "menu"))
             if (self.controller.screen == config.WELCOME
                     and self._last_screen is not None
                     and self._last_screen != config.WELCOME):
-                self.engine.reset_face_state()   # new customer = clean smile/blink state
+                self.engine.reset_face_state()  
             self.draw()
             self.clock.tick(config.FPS)
 
@@ -164,7 +157,6 @@ class CoffeeApp:
                 elif key in KEY_TO_SCREEN:
                     self.controller.go_to_screen(KEY_TO_SCREEN[key])
                 elif key == pygame.K_RETURN:
-                    # Enter = point at the first coffee, or confirm a screen.
                     target = ("POINTING" if self.controller.screen == config.MENU
                               else "THUMBS_UP")
                     events.append(target)
@@ -284,7 +276,7 @@ class CoffeeApp:
                        self.engine.current_finger_states(self.hand_landmarks),
                        self.face_display_state(), face_points)
         r.draw_toast(ctrl.active_message)
-        r.draw_effects()                      # confetti / sparkles above everything
+        r.draw_effects()                     
 
         pointer_progress = (self.engine.progress
                             if self.pointer_from_hand and self.engine.stable_gesture == "POINTING"
@@ -331,8 +323,6 @@ class CoffeeApp:
         return {"found": True, "smiling": face.is_smiling, "eyes_closed": face.is_eyes_closed,
                 "smile_progress": self.engine.smile_progress,
                 "blink_progress": self.engine.blink_progress}
-
-    
 
     def build_debug_rows(self):
         """Technical rows for the camera panel - only drawn in DEBUG_MODE."""
@@ -438,7 +428,5 @@ def main():
         app.run()
     finally:
         app.close()
-
-
 if __name__ == "__main__":
     main()
