@@ -423,7 +423,7 @@ class GestureEngine:
         if voted_gesture != self.stable_gesture:
             self.previous_gesture = self.stable_gesture
             self.stable_gesture = voted_gesture
-            self.started_at = now           # a new pose must earn its full hold
+            self.started_at = now          
             self.has_fired = False
 
         if voted_gesture == "NONE":
