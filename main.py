@@ -51,7 +51,6 @@ FADE_SECONDS = 0.30
 def clamp(value, low=0.0, high=1.0):
     """Keep a number inside the range [low, high] (used for the pointer)."""
     return max(low, min(high, value))
-
 class CoffeeApp:
     """Connects camera, AI, gestures, menu, cart, orders and the UI."""
 
